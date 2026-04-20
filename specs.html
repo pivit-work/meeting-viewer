@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pivit · 기획서 뷰어</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px}
+#app{display:flex;height:100vh;background:#0F172A}
+
+/* ── Sidebar ── */
+#sidebar{width:260px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #1E293B;overflow:hidden}
+.logo{padding:15px 16px 13px;border-bottom:1px solid #1E293B;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo-mark{width:26px;height:26px;background:linear-gradient(135deg,#4F6AF5,#8B5CF6);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;letter-spacing:-.5px}
+.logo-text{font-size:13px;font-weight:700;color:#F1F5F9}
+.logo-count{margin-left:auto;font-size:10px;color:#475569;font-family:'DM Mono',monospace;background:#1E293B;padding:2px 7px;border-radius:99px}
+.search-wrap{padding:10px 12px;border-bottom:1px solid #1E293B;flex-shrink:0}
+#search{width:100%;padding:7px 10px;background:#1E293B;border:1px solid #334155;border-radius:7px;color:#CBD5E1;font-size:12px;outline:none;font-family:inherit}
+#search::placeholder{color:#475569}
+#search:focus{border-color:#4F6AF5}
+#file-tree{flex:1;overflow-y:auto;padding:5px 0 16px}
+.folder{margin-bottom:2px}
+.folder-hd{display:flex;align-items:center;gap:7px;padding:6px 14px;cursor:pointer;color:#4B5563;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;user-select:none;transition:color .1s}
+.folder-hd:hover{color:#6B7280}
+.folder-arrow{font-size:8px;transition:transform .15s;display:inline-block}
+.folder-hd.open .folder-arrow{transform:rotate(90deg)}
+.folder-hd.open{color:#64748B}
+.folder-count{margin-left:auto;font-size:9px;color:#334155;font-family:'DM Mono',monospace}
+.folder-files{display:none}
+.folder-hd.open+.folder-files{display:block}
+.file-item{display:flex;align-items:center;gap:8px;padding:5px 14px 5px 28px;cursor:pointer;color:#64748B;font-size:12px;overflow:hidden;border-left:2px solid transparent;transition:all .1s;line-height:1.4}
+.file-item:hover{background:#1E293B;color:#94A3B8}
+.file-item.active{background:#1E293B;color:#818CF8;border-left-color:#4F6AF5}
+.file-dot{width:4px;height:4px;border-radius:50%;background:#2D3748;flex-shrink:0;transition:background .1s}
+.file-item.active .file-dot{background:#4F6AF5}
+.file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Main ── */
+#main{flex:1;display:flex;flex-direction:column;background:#F8FAFC;overflow:hidden;min-width:0}
+#topbar{height:46px;background:#fff;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;padding:0 18px;gap:14px;flex-shrink:0}
+#breadcrumb{flex:1;font-size:12px;color:#94A3B8;display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap}
+#breadcrumb .sep{color:#CBD5E1;flex-shrink:0}
+#breadcrumb .crumb{overflow:hidden;text-overflow:ellipsis}
+#breadcrumb .crumb.file{color:#0F172A;font-weight:600}
+.tabs{display:flex;gap:3px;flex-shrink:0}
+.tab{padding:5px 13px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#94A3B8;font-family:inherit;transition:all .15s}
+.tab:hover{background:#F1F5F9;color:#475569}
+.tab.active{background:#EEF2FF;color:#4F6AF5}
+#gh-link{font-size:11px;color:#64748B;text-decoration:none;padding:4px 10px;border:1px solid #E2E8F0;border-radius:6px;white-space:nowrap;display:none}
+#gh-link:hover{background:#F8FAFC}
+
+/* ── Content ── */
+#content{flex:1;overflow:hidden;position:relative}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94A3B8;gap:8px;background:#F8FAFC}
+.empty-icon{font-size:38px;opacity:.5}
+.empty-text{font-size:14px;font-weight:600;color:#64748B}
+.empty-sub{font-size:12px;color:#94A3B8}
+#preview-wrap{position:absolute;inset:0;display:flex;flex-direction:column}
+#preview-wrap.hidden{display:none}
+#preview-loader{position:absolute;inset:0;background:#F8FAFC;display:flex;align-items:center;justify-content:center;gap:10px;color:#94A3B8;font-size:12px;z-index:1;pointer-events:none;transition:opacity .2s}
+#preview-loader.done{opacity:0}
+.spin{width:16px;height:16px;border:2px solid #E2E8F0;border-top-color:#4F6AF5;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+#preview-frame{flex:1;border:none;width:100%;background:#fff}
+#source-wrap{position:absolute;inset:0;overflow-y:auto;display:none;background:#0F172A}
+#source-wrap.active{display:block}
+#source-header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.source-meta{font-size:11px;color:#475569;font-family:'DM Mono',monospace}
+#copy-btn{padding:5px 12px;border-radius:6px;border:1px solid #1E293B;background:#1E293B;font-size:11px;font-weight:600;color:#94A3B8;cursor:pointer;transition:all .15s;font-family:inherit}
+#copy-btn:hover{color:#CBD5E1}
+#copy-btn.copied{color:#4ADE80}
+#source-code{margin:0 20px 24px;border-radius:10px;overflow:hidden;border:1px solid #1E293B}
+#source-pre{margin:0;max-height:calc(100vh - 110px);overflow:auto;padding:16px 20px;font-family:'DM Mono','Fira Code',monospace;font-size:12px;line-height:1.7;color:#CBD5E1;white-space:pre;background:#0D1117}
+
+/* ── Token overlay ── */
+#token-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:100}
+#token-box{background:#1E293B;border:1px solid #334155;border-radius:14px;padding:36px 32px;width:420px}
+#token-box h2{font-size:17px;font-weight:700;color:#F1F5F9;margin-bottom:8px}
+#token-box p{font-size:13px;color:#94A3B8;line-height:1.6;margin-bottom:20px}
+#token-box p a{color:#818CF8}
+#token-input{width:100%;padding:10px 12px;background:#0F172A;border:1px solid #334155;border-radius:8px;font-size:12px;font-family:'DM Mono',monospace;outline:none;margin-bottom:10px;color:#CBD5E1}
+#token-input:focus{border-color:#4F6AF5}
+#token-err{color:#F87171;font-size:12px;margin-bottom:10px;display:none}
+#token-save-btn{width:100%;padding:10px;background:#4F6AF5;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+#token-save-btn:hover{background:#4060e0}
+#token-reset{font-size:11px;color:#475569;background:none;border:none;cursor:pointer;text-decoration:underline;margin-left:4px}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+#file-tree ::-webkit-scrollbar-thumb{background:#2D3748;border-radius:99px}
+#source-pre ::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div class="logo">
+    <div class="logo-mark">P</div>
+    <div class="logo-text">Pivit 기획서</div>
+    <div class="logo-count" id="total-count">–</div>
+  </div>
+  <div class="search-wrap">
+    <input id="search" type="text" placeholder="파일 검색..." oninput="filterTree()" />
+  </div>
+  <div id="file-tree">
+    <div style="padding:20px 16px;font-size:12px;color:#475569;display:flex;align-items:center;gap:8px">
+      <div class="spin"></div> 파일 목록 로드 중…
+    </div>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="topbar">
+    <div id="breadcrumb"><span class="crumb">파일을 선택하세요</span></div>
+    <div class="tabs">
+      <button class="tab active" onclick="setTab('preview')">Preview</button>
+      <button class="tab" onclick="setTab('source')">Source</button>
+    </div>
+    <a id="gh-link" href="#" target="_blank">GitHub ↗</a>
+    <button id="token-reset" onclick="resetToken()">토큰 재설정</button>
+  </div>
+  <div id="content">
+    <div id="empty">
+      <div class="empty-icon">✦</div>
+      <div class="empty-text">기획서를 선택하세요</div>
+      <div class="empty-sub">왼쪽 목록에서 JSX 파일을 클릭하면 렌더링됩니다</div>
+    </div>
+    <div id="preview-wrap" class="hidden">
+      <div id="preview-loader"><div class="spin"></div> 렌더링 중…</div>
+      <iframe id="preview-frame" title="preview" sandbox="allow-scripts"></iframe>
+    </div>
+    <div id="source-wrap">
+      <div id="source-header">
+        <span class="source-meta" id="source-meta"></span>
+        <button id="copy-btn" onclick="copySource()">복사</button>
+      </div>
+      <div id="source-code"><pre id="source-pre"></pre></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Token overlay -->
+<div id="token-overlay">
+  <div id="token-box">
+    <h2>🔐 GitHub 토큰 필요</h2>
+    <p>
+      pivit-specs 레포(private)에 접근하려면 읽기 전용 토큰이 필요합니다.<br>
+      <a href="https://github.com/settings/tokens/new?scopes=repo&description=Pivit+Viewer" target="_blank">토큰 발급 →</a>
+      (repo 권한 체크 후 생성, 이후 자동 저장)
+    </p>
+    <input id="token-input" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxx" />
+    <div id="token-err">형식이 올바르지 않습니다. ghp_ 또는 github_pat_ 로 시작해야 합니다.</div>
+    <button id="token-save-btn" onclick="saveToken()">저장하고 시작하기</button>
+  </div>
+</div>
+
+<script>
+const REPO   = "pivit-work/pivit-specs";
+const FOLDER = "기획서-UX-UI-UserFlow";
+const LS_KEY = "pivit_gh_token_specs";
+const GH_BASE = `https://github.com/${REPO}/blob/main/${FOLDER}`;
+
+// 숨길 폴더 (뷰어에서 제외)
+const SKIP_FOLDERS = new Set(["_workspace", "4. wireframe", "3. User-Journey-Map-User-Flow", "5. Data-inventory", "6. AI Data Spec", "Meeting-회의록"]);
+
+let ghToken    = "";
+let allGroups  = {};   // { folderName: { label, files: [{name, path, htmlUrl}] } }
+let currentFile = null;
+let activeTab  = "preview";
+let blobUrl    = null;
+let fileContent = "";
+
+// ── Token ──────────────────────────────────────────────────────────────────
+function getToken() { return localStorage.getItem(LS_KEY) || ""; }
+
+function saveToken() {
+  const v = document.getElementById("token-input").value.trim();
+  if (!v.startsWith("ghp_") && !v.startsWith("github_pat_")) {
+    document.getElementById("token-err").style.display = "block";
+    return;
+  }
+  localStorage.setItem(LS_KEY, v);
+  ghToken = v;
+  document.getElementById("token-overlay").style.display = "none";
+  loadTree();
+}
+
+function resetToken() {
+  localStorage.removeItem(LS_KEY);
+  document.getElementById("token-input").value = "";
+  document.getElementById("token-err").style.display = "none";
+  document.getElementById("token-overlay").style.display = "flex";
+}
+
+// ── GitHub API ─────────────────────────────────────────────────────────────
+async function ghGet(path) {
+  const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
+  const r = await fetch(url, {
+    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" }
+  });
+  if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function fetchText(path) {
+  const data = await ghGet(path);
+  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+// ── Tree load ──────────────────────────────────────────────────────────────
+async function loadTree() {
+  try {
+    const items = await ghGet(FOLDER);
+    const folders = items.filter(i => i.type === "dir" && !SKIP_FOLDERS.has(i.name));
+
+    // 각 폴더의 JSX 파일 목록 병렬 로드
+    const results = await Promise.all(folders.map(async f => {
+      try {
+        const files = await ghGet(f.path);
+        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx")).map(fi => ({
+          name: fi.name,
+          path: fi.path,
+          htmlUrl: fi.html_url,
+        }));
+        return { folder: f.name, files: jsxFiles };
+      } catch { return { folder: f.name, files: [] }; }
+    }));
+
+    // 루트의 JSX 파일도 포함
+    const rootJsx = items.filter(i => i.type === "file" && i.name.endsWith(".jsx")).map(fi => ({
+      name: fi.name, path: fi.path, htmlUrl: fi.html_url,
+    }));
+
+    allGroups = {};
+    if (rootJsx.length) allGroups["(루트)"] = { label: "(루트)", files: rootJsx };
+    for (const { folder, files } of results) {
+      if (files.length > 0) allGroups[folder] = { label: folder, files };
+    }
+
+    const total = Object.values(allGroups).reduce((s, g) => s + g.files.length, 0);
+    document.getElementById("total-count").textContent = `${total}개`;
+    renderTree();
+  } catch (e) {
+    document.getElementById("file-tree").innerHTML =
+      `<div style="padding:16px;font-size:12px;color:#F87171">로드 실패: ${e.message}</div>`;
+  }
+}
+
+// ── Tree render ────────────────────────────────────────────────────────────
+function renderTree() {
+  const q = document.getElementById("search").value.toLowerCase();
+  const tree = document.getElementById("file-tree");
+  tree.innerHTML = "";
+
+  for (const [key, group] of Object.entries(allGroups)) {
+    const files = group.files.filter(f =>
+      q === "" || f.name.toLowerCase().includes(q) || key.toLowerCase().includes(q)
+    );
+    if (files.length === 0) continue;
+
+    const wrap = document.createElement("div");
+    wrap.className = "folder";
+
+    const hd = document.createElement("div");
+    hd.className = "folder-hd open";
+    hd.innerHTML = `<span class="folder-arrow">▶</span>${group.label}<span class="folder-count">${files.length}</span>`;
+    hd.onclick = () => { hd.classList.toggle("open"); };
+
+    const fl = document.createElement("div");
+    fl.className = "folder-files";
+    for (const file of files) {
+      const item = document.createElement("div");
+      item.className = "file-item" + (currentFile?.path === file.path ? " active" : "");
+      item.dataset.path = file.path;
+      const label = file.name.replace(/\.jsx$/, "");
+      item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>`;
+      item.onclick = () => selectFile(file, key);
+      fl.appendChild(item);
+    }
+
+    wrap.appendChild(hd);
+    wrap.appendChild(fl);
+    tree.appendChild(wrap);
+  }
+}
+
+function filterTree() { renderTree(); }
+
+// ── Select file ────────────────────────────────────────────────────────────
+async function selectFile(file, folderKey) {
+  currentFile = file;
+  fileContent = "";
+  renderTree();
+
+  // Breadcrumb
+  const bc = document.getElementById("breadcrumb");
+  bc.innerHTML = `<span class="crumb">${folderKey}</span><span class="sep">/</span><span class="crumb file">${file.name}</span>`;
+
+  // GitHub link
+  const lnk = document.getElementById("gh-link");
+  lnk.href = file.htmlUrl;
+  lnk.style.display = "inline-block";
+
+  document.getElementById("empty").style.display = "none";
+
+  // Load content
+  try {
+    fileContent = await fetchText(file.path);
+  } catch (e) {
+    fileContent = `// 로드 실패: ${e.message}`;
+  }
+
+  activeTab === "preview" ? showPreview() : showSource();
+}
+
+// ── Tab ────────────────────────────────────────────────────────────────────
+function setTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab").forEach(el => {
+    el.classList.toggle("active", el.textContent.toLowerCase().startsWith(tab));
+  });
+  tab === "preview" ? showPreview() : showSource();
+}
+
+// ── Preview ────────────────────────────────────────────────────────────────
+function showPreview() {
+  document.getElementById("preview-wrap").classList.remove("hidden");
+  document.getElementById("source-wrap").classList.remove("active");
+  if (!fileContent) return;
+
+  const loader = document.getElementById("preview-loader");
+  loader.classList.remove("done");
+
+  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+
+  const blob = new Blob([buildIframeHTML(fileContent)], { type: "text/html" });
+  blobUrl = URL.createObjectURL(blob);
+
+  const frame = document.getElementById("preview-frame");
+  frame.onload = () => loader.classList.add("done");
+  frame.src = blobUrl;
+}
+
+function buildIframeHTML(code) {
+  const match = code.match(/export\s+default\s+function\s+(\w+)/);
+  const compName = match ? match[1] : null;
+
+  const processed = code
+    .split("\n")
+    .filter(line => !line.trimStart().startsWith("import "))
+    .join("\n")
+    .replace(/\bexport\s+default\s+(function|class)\b/g, "$1");
+
+  const needsRecharts = /recharts/i.test(code);
+
+  const rechartsScript = needsRecharts
+    ? '<script src="https://unpkg.com/recharts/umd/Recharts.js"><\/script>' : "";
+  const rechartsSetup = needsRecharts
+    ? `const { BarChart, Bar, LineChart, Line, AreaChart, Area,
+        XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+        ResponsiveContainer, ReferenceLine, Cell,
+        PieChart, Pie, ComposedChart } = Recharts;` : "";
+
+  const renderCall = compName
+    ? `try {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(${compName}));
+      } catch(e) {
+        document.getElementById('root').innerHTML =
+          '<div style="margin:24px;padding:16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;font-family:monospace;font-size:12px;color:#DC2626"><b>렌더링 오류</b><br><br>' + e.message + '</div>';
+      }`
+    : `document.getElementById('root').innerHTML =
+        '<div style="padding:32px;color:#94A3B8;font-size:13px;text-align:center">export default 없음</div>';`;
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+${rechartsScript}
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react,env">
+const {
+  useState, useEffect, useRef, useCallback,
+  useMemo, useReducer, useContext, createContext,
+  forwardRef, memo
+} = React;
+${rechartsSetup}
+
+${processed}
+
+${renderCall}
+<\/script>
+</body>
+</html>`;
+}
+
+// ── Source ────────────────────────────────────────────────────────────────
+function showSource() {
+  document.getElementById("preview-wrap").classList.add("hidden");
+  document.getElementById("source-wrap").classList.add("active");
+  if (!fileContent) return;
+
+  const lines = fileContent.split("\n").length;
+  const kb = (fileContent.length / 1024).toFixed(1);
+  document.getElementById("source-meta").textContent = `${lines} lines · ${kb} KB`;
+  document.getElementById("source-pre").textContent = fileContent;
+}
+
+function copySource() {
+  navigator.clipboard.writeText(fileContent).then(() => {
+    const btn = document.getElementById("copy-btn");
+    btn.textContent = "복사됨 ✓";
+    btn.classList.add("copied");
+    setTimeout(() => { btn.textContent = "복사"; btn.classList.remove("copied"); }, 2000);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+ghToken = getToken();
+if (!ghToken) {
+  document.getElementById("token-overlay").style.display = "flex";
+} else {
+  loadTree();
+}
+</script>
+</body>
+</html>
