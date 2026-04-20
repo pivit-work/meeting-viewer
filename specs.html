@@ -169,11 +169,13 @@ const GH_BASE = `https://github.com/${REPO}/blob/main/${FOLDER}`;
 // 숨길 폴더 (뷰어에서 제외)
 const SKIP_FOLDERS = new Set(["_workspace", "4. wireframe", "3. User-Journey-Map-User-Flow", "5. Data-inventory", "6. AI Data Spec", "Meeting-회의록"]);
 
-const NEW_DAYS = 7;   // 이 일수 이내 커밋 = NEW 배지
+const NEW_DAYS   = 7;          // 이 일수 이내 커밋 = NEW 배지
+const LS_SEEN_KEY = "pivit_seen_paths";  // 클릭해서 읽은 파일 경로 저장
 
 let ghToken    = "";
 let allGroups  = {};   // { folderName: { label, files: [{name, path, htmlUrl}] } }
 let newPaths   = new Set();   // 최근 커밋된 파일 경로
+let seenPaths  = new Set(JSON.parse(localStorage.getItem(LS_SEEN_KEY) || "[]"));
 let currentFile = null;
 let activeTab  = "preview";
 let blobUrl    = null;
@@ -314,7 +316,7 @@ function renderTree() {
       item.className = "file-item" + (currentFile?.path === file.path ? " active" : "");
       item.dataset.path = file.path;
       const label = file.name.replace(/\.jsx$/, "");
-      const isNew = newPaths.has(file.path);
+      const isNew = newPaths.has(file.path) && !seenPaths.has(file.path);
       item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>${isNew ? '<span class="badge-new">NEW</span>' : ''}`;
       item.onclick = () => selectFile(file, key);
       fl.appendChild(item);
@@ -332,6 +334,11 @@ function filterTree() { renderTree(); }
 async function selectFile(file, folderKey) {
   currentFile = file;
   fileContent = "";
+  // NEW 배지 dismissal: 클릭한 파일을 읽음 처리
+  if (newPaths.has(file.path) && !seenPaths.has(file.path)) {
+    seenPaths.add(file.path);
+    localStorage.setItem(LS_SEEN_KEY, JSON.stringify([...seenPaths]));
+  }
   renderTree();
 
   // Breadcrumb
