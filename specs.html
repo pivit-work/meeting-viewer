@@ -34,7 +34,8 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 .file-item.active{background:#1E293B;color:#818CF8;border-left-color:#4F6AF5}
 .file-dot{width:4px;height:4px;border-radius:50%;background:#2D3748;flex-shrink:0;transition:background .1s}
 .file-item.active .file-dot{background:#4F6AF5}
-.file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.badge-new{font-size:9px;font-weight:700;letter-spacing:.4px;color:#4ADE80;background:#052e16;border:1px solid #166534;border-radius:4px;padding:1px 5px;flex-shrink:0;animation:fadein .3s ease}
 
 /* ── Main ── */
 #main{flex:1;display:flex;flex-direction:column;background:#F8FAFC;overflow:hidden;min-width:0}
@@ -168,8 +169,11 @@ const GH_BASE = `https://github.com/${REPO}/blob/main/${FOLDER}`;
 // 숨길 폴더 (뷰어에서 제외)
 const SKIP_FOLDERS = new Set(["_workspace", "4. wireframe", "3. User-Journey-Map-User-Flow", "5. Data-inventory", "6. AI Data Spec", "Meeting-회의록"]);
 
+const NEW_DAYS = 7;   // 이 일수 이내 커밋 = NEW 배지
+
 let ghToken    = "";
 let allGroups  = {};   // { folderName: { label, files: [{name, path, htmlUrl}] } }
+let newPaths   = new Set();   // 최근 커밋된 파일 경로
 let currentFile = null;
 let activeTab  = "preview";
 let blobUrl    = null;
@@ -206,6 +210,35 @@ async function ghGet(path) {
   if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+async function ghCommits(path) {
+  const url = `https://api.github.com/repos/${REPO}/commits?path=${encodeURIComponent(path)}&per_page=1`;
+  const r = await fetch(url, {
+    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" }
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data[0]?.commit?.committer?.date || data[0]?.commit?.author?.date || null;
+}
+
+// NEW 배지: 파일별 마지막 커밋일을 병렬로 조회 후 newPaths 갱신
+async function loadNewBadges() {
+  const cutoff = new Date(Date.now() - NEW_DAYS * 86400 * 1000);
+  const allFiles = Object.values(allGroups).flatMap(g => g.files);
+
+  // 병렬 조회 (rate limit 고려해 50개씩 배치)
+  const BATCH = 50;
+  for (let i = 0; i < allFiles.length; i += BATCH) {
+    const batch = allFiles.slice(i, i + BATCH);
+    await Promise.all(batch.map(async f => {
+      const dateStr = await ghCommits(f.path);
+      if (dateStr && new Date(dateStr) > cutoff) {
+        newPaths.add(f.path);
+      }
+    }));
+  }
+  renderTree();   // 배지 반영해 재렌더링
 }
 
 async function fetchText(path) {
@@ -247,6 +280,7 @@ async function loadTree() {
     const total = Object.values(allGroups).reduce((s, g) => s + g.files.length, 0);
     document.getElementById("total-count").textContent = `${total}개`;
     renderTree();
+    loadNewBadges();   // 배지는 백그라운드에서 비동기 로드
   } catch (e) {
     document.getElementById("file-tree").innerHTML =
       `<div style="padding:16px;font-size:12px;color:#F87171">로드 실패: ${e.message}</div>`;
@@ -280,7 +314,8 @@ function renderTree() {
       item.className = "file-item" + (currentFile?.path === file.path ? " active" : "");
       item.dataset.path = file.path;
       const label = file.name.replace(/\.jsx$/, "");
-      item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>`;
+      const isNew = newPaths.has(file.path);
+      item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>${isNew ? '<span class="badge-new">NEW</span>' : ''}`;
       item.onclick = () => selectFile(file, key);
       fl.appendChild(item);
     }
@@ -443,3 +478,4 @@ if (!ghToken) {
 </script>
 </body>
 </html>
+
