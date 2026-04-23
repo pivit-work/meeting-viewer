@@ -384,7 +384,7 @@ async function loadFileList() {
 
       const files = await ghGet(repo, folder);
       const filtered = files.filter(f => {
-        if (!f.name.endsWith(".md")) return false;
+        if (!f.name.endsWith(".md") && !f.name.endsWith(".html")) return false;
         if (AUTOMATION_EXCLUDE.includes(f.name)) return false;
         if (isRootFolder) return AUTOMATION_ROOT_FILES.includes(f.name);
         return true;
@@ -398,7 +398,7 @@ async function loadFileList() {
         date:    parseDate(f.name),
         category: (() => {
           if (folder === "ir-deck")    return "irdeck";
-          if (folder === "tech-talk")  return "automation";
+          if (folder === "tech-talk")  return "techtalk";
           if (folder === "기획내용")   return "planning";
           if (folder === "docs" || isRootFolder || isAutoRepo) return "automation";
           return categorize(f.name);
