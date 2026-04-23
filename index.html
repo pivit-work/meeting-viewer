@@ -83,13 +83,13 @@
   /* ── 탭 (2줄 레이아웃) */
   #tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     border-bottom: 1px solid var(--border);
     padding: 0 8px;
   }
   .tab {
-    padding: 9px 4px;
-    text-align: center; font-size: 11px; font-weight: 600;
+    padding: 8px 2px;
+    text-align: center; font-size: 10px; font-weight: 600;
     color: var(--muted); cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.15s; user-select: none;
@@ -134,6 +134,7 @@
   }
   .badge-ir   { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
   .badge-auto { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
+  .badge-tt   { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
 
   /* ── 메인 */
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
@@ -174,6 +175,13 @@
   #md-body td { padding: 8px 12px; border: 1px solid var(--border); line-height: 1.6; }
   #md-body tr:nth-child(even) td { background: #fafafa; }
   #md-body input[type="checkbox"] { margin-right: 6px; }
+
+  /* HTML 슬라이드 iframe */
+  #html-frame {
+    width: 100%; height: 100%;
+    border: none; display: none;
+    background: #fff;
+  }
 
   #empty-state {
     display: flex; flex-direction: column;
@@ -222,7 +230,7 @@
   <div id="sidebar-header">
     <div>
       <div class="logo">PIVIT 문서 뷰어</div>
-      <div class="sub">회의록 · 기획 · IR · 자동화</div>
+      <div class="sub">회의록 · 기획 · IR · 자동화 · Tech Talk</div>
     </div>
     <button id="token-reset-btn" onclick="resetToken()">토큰 재설정</button>
   </div>
@@ -232,6 +240,7 @@
     <div class="tab"        data-tab="planning"   onclick="switchTab('planning')">기획 문서</div>
     <div class="tab"        data-tab="irdeck"     onclick="switchTab('irdeck')">IR Deck</div>
     <div class="tab"        data-tab="automation" onclick="switchTab('automation')">자동 프로세스</div>
+    <div class="tab"        data-tab="techtalk"   onclick="switchTab('techtalk')">Tech Talk</div>
   </div>
 
   <div id="search-wrap">
@@ -255,6 +264,7 @@
       <div class="msg">왼쪽 목록에서 문서를 선택하세요</div>
     </div>
     <div id="md-body" style="display:none"></div>
+    <iframe id="html-frame"></iframe>
   </div>
 </div>
 
@@ -268,9 +278,9 @@ const TAB_SOURCES = {
   irdeck:     [{ repo: "pivit-work/team-wiki",                folder: "ir-deck" }],
   automation: [
     { repo: "pivit-work/team-wiki",                           folder: "" },
-    { repo: "pivit-work/team-wiki",                           folder: "tech-talk" },
     { repo: "pivit-work/pivit-meeting-automation",            folder: "docs" },
   ],
+  techtalk:   [{ repo: "pivit-work/team-wiki",                folder: "tech-talk" }],
 };
 
 // automation 탭에서 team-wiki 루트 중 보여줄 파일 (화이트리스트)
@@ -343,6 +353,8 @@ const AUTO_LABELS = {
   "automation-alerts":                 "자동화 & 얼럿 전체 목록",
   "TT01_github-doc-management":        "Tech Talk #01 — GitHub로 팀 문서 관리하기",
   "TT02_harness-engineering":          "Tech Talk #02 — 기획자가 만든 AI 업무 자동화 구조",
+  "TT02_harness-engineering-slides":   "Tech Talk #02 슬라이드 ▶",
+  "claude-code-guide-slides":          "Claude Code 가이드 슬라이드 ▶",
 };
 
 function autoLabel(name) {
@@ -391,7 +403,8 @@ async function loadFileList() {
           if (folder === "docs" || isRootFolder || isAutoRepo) return "automation";
           return categorize(f.name);
         })(),
-        label: (folder === "docs" || isRootFolder || folder === "tech-talk") ? autoLabel(f.name) : f.name.replace(/\.md$/, ""),
+        label: (folder === "docs" || isRootFolder || folder === "tech-talk") ? autoLabel(f.name) : f.name.replace(/\.(md|html)$/, ""),
+        isHtml: f.name.endsWith('.html'),
       }));
 
       allMapped.push(...mapped);
@@ -434,9 +447,10 @@ function renderList() {
     let badge = "";
     if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
     if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
+    if (currentTab === "techtalk")   badge = f.isHtml ? `<span class="badge badge-tt">SLIDES</span>` : `<span class="badge badge-tt">TT</span>`;
     return `
       <div class="file-item ${isActive ? "active" : ""}"
-           onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}')">
+           onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
         <div class="fname">${f.label} ${badge}</div>
         <div class="fdate">${fmtDate(f.date)}</div>
       </div>`;
@@ -444,7 +458,7 @@ function renderList() {
 }
 
 // ── 파일 열기
-async function openFile(path, label, htmlUrl, repo) {
+async function openFile(path, label, htmlUrl, repo, isHtml) {
   activeItem = path;
   renderList();
 
@@ -453,17 +467,53 @@ async function openFile(path, label, htmlUrl, repo) {
   lnk.href = htmlUrl;
   lnk.style.display = "inline-block";
 
-  const mdBody = document.getElementById("md-body");
-  document.getElementById("empty-state").style.display = "none";
-  mdBody.style.display = "block";
-  mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+  const mdBody   = document.getElementById("md-body");
+  const frame    = document.getElementById("html-frame");
+  const empty    = document.getElementById("empty-state");
+  const content  = document.getElementById("content");
 
-  try {
-    const text = await fetchText(repo, path);
-    mdBody.innerHTML = marked.parse(text);
-    document.getElementById("content").scrollTop = 0;
-  } catch (e) {
-    mdBody.innerHTML = `<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`;
+  empty.style.display = "none";
+
+  if (isHtml === "true") {
+    // HTML 슬라이드: iframe srcdoc으로 렌더링
+    mdBody.style.display = "none";
+    frame.style.display  = "none";
+    frame.srcdoc = "";
+
+    mdBody.style.display = "block";
+    mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+
+    try {
+      const data  = await ghGet(repo, path);
+      const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+      const htmlContent = new TextDecoder("utf-8").decode(bytes);
+
+      mdBody.style.display = "none";
+      frame.srcdoc         = htmlContent;
+      frame.style.display  = "block";
+      // iframe은 content div 안에서 height:100% 맞추기
+      content.style.padding = "0";
+      content.style.overflow = "hidden";
+    } catch (e) {
+      mdBody.style.display = "block";
+      mdBody.innerHTML = `<p style="color:#ef4444">슬라이드 로드 실패: ${e.message}</p>`;
+    }
+  } else {
+    // Markdown 렌더링
+    frame.style.display  = "none";
+    frame.srcdoc         = "";
+    content.style.padding = "";
+    content.style.overflow = "";
+    mdBody.style.display = "block";
+    mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+
+    try {
+      const text = await fetchText(repo, path);
+      mdBody.innerHTML = marked.parse(text);
+      content.scrollTop = 0;
+    } catch (e) {
+      mdBody.innerHTML = `<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`;
+    }
   }
 }
 
@@ -477,6 +527,9 @@ function switchTab(tab) {
   document.getElementById("doc-title").textContent = "파일을 선택하세요";
   document.getElementById("gh-link").style.display = "none";
   document.getElementById("md-body").style.display = "none";
+  const fr = document.getElementById("html-frame"); fr.style.display="none"; fr.srcdoc="";
+  document.getElementById("content").style.padding = "";
+  document.getElementById("content").style.overflow = "";
   document.getElementById("empty-state").style.display = "flex";
   loadFileList();
 }
