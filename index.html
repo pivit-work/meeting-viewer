@@ -83,13 +83,13 @@
   /* ── 탭 (2줄 레이아웃) */
   #tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     border-bottom: 1px solid var(--border);
     padding: 0 8px;
   }
   .tab {
-    padding: 8px 2px;
-    text-align: center; font-size: 10px; font-weight: 600;
+    padding: 9px 4px;
+    text-align: center; font-size: 11px; font-weight: 600;
     color: var(--muted); cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.15s; user-select: none;
@@ -134,7 +134,6 @@
   }
   .badge-ir   { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
   .badge-auto { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
-  .badge-tt   { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
 
   /* ── 메인 */
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
@@ -223,7 +222,7 @@
   <div id="sidebar-header">
     <div>
       <div class="logo">PIVIT 문서 뷰어</div>
-      <div class="sub">회의록 · 기획 · IR · 자동화 · Tech Talk</div>
+      <div class="sub">회의록 · 기획 · IR · 자동화</div>
     </div>
     <button id="token-reset-btn" onclick="resetToken()">토큰 재설정</button>
   </div>
@@ -233,7 +232,6 @@
     <div class="tab"        data-tab="planning"   onclick="switchTab('planning')">기획 문서</div>
     <div class="tab"        data-tab="irdeck"     onclick="switchTab('irdeck')">IR Deck</div>
     <div class="tab"        data-tab="automation" onclick="switchTab('automation')">자동 프로세스</div>
-    <div class="tab"        data-tab="techtalk"   onclick="switchTab('techtalk')">Tech Talk</div>
   </div>
 
   <div id="search-wrap">
@@ -433,7 +431,6 @@ function renderList() {
     let badge = "";
     if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
     if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
-    if (currentTab === "techtalk")   badge = `<span class="badge badge-tt">TT</span>`;
     return `
       <div class="file-item ${isActive ? "active" : ""}"
            onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}')">
