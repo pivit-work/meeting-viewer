@@ -83,13 +83,13 @@
   /* ── 탭 (2줄 레이아웃) */
   #tabs {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     border-bottom: 1px solid var(--border);
     padding: 0 8px;
   }
   .tab {
-    padding: 9px 4px;
-    text-align: center; font-size: 11px; font-weight: 600;
+    padding: 8px 2px;
+    text-align: center; font-size: 10px; font-weight: 600;
     color: var(--muted); cursor: pointer;
     border-bottom: 2px solid transparent;
     transition: all 0.15s; user-select: none;
@@ -134,6 +134,7 @@
   }
   .badge-ir   { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
   .badge-auto { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
+  .badge-tt   { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
 
   /* ── 메인 */
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
@@ -222,7 +223,7 @@
   <div id="sidebar-header">
     <div>
       <div class="logo">PIVIT 문서 뷰어</div>
-      <div class="sub">회의록 · 기획 · IR · 자동화</div>
+      <div class="sub">회의록 · 기획 · IR · 자동화 · Tech Talk</div>
     </div>
     <button id="token-reset-btn" onclick="resetToken()">토큰 재설정</button>
   </div>
@@ -232,6 +233,7 @@
     <div class="tab"        data-tab="planning"   onclick="switchTab('planning')">기획 문서</div>
     <div class="tab"        data-tab="irdeck"     onclick="switchTab('irdeck')">IR Deck</div>
     <div class="tab"        data-tab="automation" onclick="switchTab('automation')">자동 프로세스</div>
+    <div class="tab"        data-tab="techtalk"   onclick="switchTab('techtalk')">Tech Talk</div>
   </div>
 
   <div id="search-wrap">
@@ -267,6 +269,7 @@ const TAB_SOURCES = {
   planning:   { repo: "pivit-work/team-wiki",                 folder: "회의록" },
   irdeck:     { repo: "pivit-work/team-wiki",                 folder: "ir-deck" },
   automation: { repo: "pivit-work/pivit-meeting-automation",  folder: "docs" },
+  techtalk:   { repo: "pivit-work/team-wiki",                 folder: "tech-talk" },
 };
 
 // 자동화 탭에서 제외할 파일 (transcript 원본은 회의록 탭에 있음)
@@ -355,7 +358,7 @@ async function loadFileList() {
 
   try {
     const files = await ghGet(repo, folder);
-    const isAuto = currentTab === "automation" || TAB_SOURCES[currentTab].repo.includes("automation");
+    const isAuto = TAB_SOURCES[currentTab].repo.includes("meeting-automation");
 
     const mapped = files
       .filter(f => f.name.endsWith(".md") && !AUTOMATION_EXCLUDE.includes(f.name))
@@ -366,8 +369,9 @@ async function loadFileList() {
         htmlUrl: f.html_url,
         date:    parseDate(f.name),
         category: (() => {
-          if (folder === "ir-deck") return "irdeck";
-          if (isAuto)               return "automation";
+          if (folder === "ir-deck")   return "irdeck";
+          if (folder === "tech-talk") return "techtalk";
+          if (isAuto)                return "automation";
           return categorize(f.name);
         })(),
         label: folder === "docs" ? autoLabel(f.name) : f.name.replace(/\.md$/, ""),
@@ -411,6 +415,7 @@ function renderList() {
     let badge = "";
     if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
     if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
+    if (currentTab === "techtalk")   badge = `<span class="badge badge-tt">TT</span>`;
     return `
       <div class="file-item ${isActive ? "active" : ""}"
            onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}')">
