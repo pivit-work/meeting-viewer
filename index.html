@@ -265,12 +265,18 @@ const LS_KEY = "pivit_gh_token";
 
 // 탭별 소스 설정 (레포 + 폴더 분리)
 const TAB_SOURCES = {
-  minutes:    { repo: "pivit-work/team-wiki",                 folder: "회의록" },
-  planning:   { repo: "pivit-work/team-wiki",                 folder: "회의록" },
-  irdeck:     { repo: "pivit-work/team-wiki",                 folder: "ir-deck" },
-  automation: { repo: "pivit-work/pivit-meeting-automation",  folder: "docs" },
-  techtalk:   { repo: "pivit-work/team-wiki",                 folder: "tech-talk" },
+  minutes:    [{ repo: "pivit-work/team-wiki",                folder: "회의록" }],
+  planning:   [{ repo: "pivit-work/team-wiki",                folder: "회의록" }],
+  irdeck:     [{ repo: "pivit-work/team-wiki",                folder: "ir-deck" }],
+  automation: [
+    { repo: "pivit-work/team-wiki",                           folder: "" },
+    { repo: "pivit-work/pivit-meeting-automation",            folder: "docs" },
+  ],
+  techtalk:   [{ repo: "pivit-work/team-wiki",                folder: "tech-talk" }],
 };
+
+// automation 탭에서 team-wiki 루트 중 보여줄 파일 (화이트리스트)
+const AUTOMATION_ROOT_FILES = ["automation-alerts.md"];
 
 // 자동화 탭에서 제외할 파일 (transcript 원본은 회의록 탭에 있음)
 const AUTOMATION_EXCLUDE = ["meeting-transcript-2026-03-26.md"];
@@ -336,6 +342,7 @@ const AUTO_LABELS = {
   "implementation-status":             "구현 현황 (Implementation Status)",
   "meeting-notes-automation-pipeline": "회의록 자동화 파이프라인 설계",
   "project-handoff":                   "프로젝트 핸드오프 문서",
+  "automation-alerts":                 "자동화 & 얼럿 전체 목록",
 };
 
 function autoLabel(name) {
@@ -345,8 +352,8 @@ function autoLabel(name) {
 
 // ── 파일 목록 로드
 async function loadFileList() {
-  const { repo, folder } = TAB_SOURCES[currentTab];
-  const cacheKey = `${repo}/${folder}`;
+  const sources = TAB_SOURCES[currentTab];
+  const cacheKey = currentTab;
 
   if (folderCache[cacheKey]) {
     renderList();
@@ -357,12 +364,21 @@ async function loadFileList() {
     `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
 
   try {
-    const files = await ghGet(repo, folder);
-    const isAuto = TAB_SOURCES[currentTab].repo.includes("meeting-automation");
+    const allMapped = [];
 
-    const mapped = files
-      .filter(f => f.name.endsWith(".md") && !AUTOMATION_EXCLUDE.includes(f.name))
-      .map(f => ({
+    for (const { repo, folder } of sources) {
+      const isAutoRepo = repo.includes("meeting-automation");
+      const isRootFolder = folder === "";
+
+      const files = await ghGet(repo, folder);
+      const filtered = files.filter(f => {
+        if (!f.name.endsWith(".md")) return false;
+        if (AUTOMATION_EXCLUDE.includes(f.name)) return false;
+        if (isRootFolder) return AUTOMATION_ROOT_FILES.includes(f.name);
+        return true;
+      });
+
+      const mapped = filtered.map(f => ({
         name:    f.name,
         path:    f.path,
         repo:    repo,
@@ -371,14 +387,17 @@ async function loadFileList() {
         category: (() => {
           if (folder === "ir-deck")   return "irdeck";
           if (folder === "tech-talk") return "techtalk";
-          if (isAuto)                return "automation";
+          if (folder === "docs" || isRootFolder || isAutoRepo) return "automation";
           return categorize(f.name);
         })(),
-        label: folder === "docs" ? autoLabel(f.name) : f.name.replace(/\.md$/, ""),
-      }))
-      .sort((a, b) => b.date.localeCompare(a.date));
+        label: (folder === "docs" || isRootFolder) ? autoLabel(f.name) : f.name.replace(/\.md$/, ""),
+      }));
 
-    folderCache[cacheKey] = mapped;
+      allMapped.push(...mapped);
+    }
+
+    allMapped.sort((a, b) => b.date.localeCompare(a.date));
+    folderCache[cacheKey] = allMapped;
     renderList();
   } catch (e) {
     document.getElementById("file-list").innerHTML =
@@ -395,8 +414,7 @@ function fmtDate(d) {
 function renderList() {
   const q       = document.getElementById("search").value.toLowerCase();
   const list    = document.getElementById("file-list");
-  const { repo, folder } = TAB_SOURCES[currentTab];
-  const cached  = folderCache[`${repo}/${folder}`] || [];
+  const cached  = folderCache[currentTab] || [];
 
   const items = cached.filter(f =>
     f.category === currentTab &&
