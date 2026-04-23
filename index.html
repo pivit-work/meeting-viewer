@@ -28,7 +28,7 @@
     overflow: hidden;
   }
 
-  /* ── 토큰 설정 오버레이 ─────────────────────────── */
+  /* ── 토큰 설정 오버레이 */
   #token-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.45);
@@ -77,7 +77,7 @@
   #token-save-btn:hover { opacity: 0.9; }
   #token-err { color: #ef4444; font-size: 12px; margin-top: 8px; display: none; }
 
-  /* ── 사이드바 ─────────────────────────────────── */
+  /* ── 사이드바 */
   #sidebar {
     width: var(--sidebar-width);
     background: var(--sidebar-bg);
@@ -153,7 +153,18 @@
   .file-item .fdate { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .file-item.active .fname { color: var(--accent); }
 
-  /* ── 메인 ──────────────────────────────────────── */
+  /* IR Deck 뱃지 */
+  .badge-ir {
+    display: inline-block;
+    font-size: 9px; font-weight: 700;
+    background: #fef3c7; color: #92400e;
+    border: 1px solid #fbbf24;
+    border-radius: 4px; padding: 1px 5px;
+    margin-left: 6px; vertical-align: middle;
+    letter-spacing: .3px;
+  }
+
+  /* ── 메인 */
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 
   #toolbar {
@@ -226,7 +237,7 @@
 </head>
 <body>
 
-<!-- ── 토큰 입력 오버레이 ─────────────────────────── -->
+<!-- 토큰 입력 오버레이 -->
 <div id="token-overlay" style="display:none">
   <div id="token-box">
     <h2>🔐 GitHub 접근 설정</h2>
@@ -241,12 +252,12 @@
   </div>
 </div>
 
-<!-- ── 사이드바 ───────────────────────────────────── -->
+<!-- 사이드바 -->
 <div id="sidebar">
   <div id="sidebar-header">
     <div>
       <div class="logo">PIVIT 문서 뷰어</div>
-      <div class="sub">회의록 · 기획 문서</div>
+      <div class="sub">회의록 · 기획 문서 · IR</div>
     </div>
     <button id="token-reset-btn" onclick="resetToken()" title="토큰 재설정">토큰 재설정</button>
   </div>
@@ -254,6 +265,7 @@
   <div id="tabs">
     <div class="tab active" data-tab="minutes" onclick="switchTab('minutes')">회의록</div>
     <div class="tab" data-tab="planning" onclick="switchTab('planning')">기획 문서</div>
+    <div class="tab" data-tab="irdeck" onclick="switchTab('irdeck')">IR Deck</div>
   </div>
 
   <div id="search-wrap">
@@ -265,7 +277,7 @@
   </div>
 </div>
 
-<!-- ── 메인 ──────────────────────────────────────── -->
+<!-- 메인 -->
 <div id="main">
   <div id="toolbar">
     <div id="doc-title">파일을 선택하세요</div>
@@ -282,15 +294,22 @@
 
 <script>
 const REPO   = "pivit-work/team-wiki";
-const FOLDER = "회의록";
 const LS_KEY = "pivit_gh_token";
 
-let allFiles   = [];
-let currentTab = "minutes";
-let activeItem = null;
-let ghToken    = "";
+// 탭별 폴더 매핑
+const TAB_FOLDERS = {
+  minutes:  "회의록",
+  planning: "회의록",
+  irdeck:   "ir-deck",
+};
 
-// ── 토큰 관리 ────────────────────────────────────────────────────────────────
+// 폴더별 파일 캐시 (같은 폴더는 한 번만 로드)
+let folderCache = {};
+let currentTab  = "minutes";
+let activeItem  = null;
+let ghToken     = "";
+
+// ── 토큰 관리
 function getToken() { return localStorage.getItem(LS_KEY) || ""; }
 
 function saveToken() {
@@ -312,7 +331,7 @@ function resetToken() {
   document.getElementById("token-overlay").style.display = "flex";
 }
 
-// ── GitHub API ───────────────────────────────────────────────────────────────
+// ── GitHub API
 async function ghGet(path) {
   const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
   const r = await fetch(url, {
@@ -329,7 +348,7 @@ async function fetchText(path) {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
-// ── 파일 목록 로드 ───────────────────────────────────────────────────────────
+// ── 파일 분류
 function parseDate(name) {
   const m = name.match(/(\d{8})/);
   return m ? m[1] : "00000000";
@@ -340,22 +359,34 @@ function categorize(name) {
   return "minutes";
 }
 
+// ── 파일 목록 로드
 async function loadFileList() {
+  const folder = TAB_FOLDERS[currentTab];
+
+  // 이미 캐시된 폴더면 렌더만
+  if (folderCache[folder]) {
+    renderList();
+    return;
+  }
+
   document.getElementById("file-list").innerHTML =
     `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+
   try {
-    const files = await ghGet(FOLDER);
-    allFiles = files
+    const files = await ghGet(folder);
+    const mapped = files
       .filter(f => f.name.endsWith(".md"))
       .map(f => ({
-        name: f.name,
-        path: f.path,
-        htmlUrl: f.html_url,
-        date: parseDate(f.name),
-        category: categorize(f.name),
-        label: f.name.replace(/\.md$/, ""),
+        name:     f.name,
+        path:     f.path,
+        htmlUrl:  f.html_url,
+        date:     parseDate(f.name),
+        category: folder === "ir-deck" ? "irdeck" : categorize(f.name),
+        label:    f.name.replace(/\.md$/, ""),
       }))
       .sort((a, b) => b.date.localeCompare(a.date));
+
+    folderCache[folder] = mapped;
     renderList();
   } catch (e) {
     document.getElementById("file-list").innerHTML =
@@ -363,17 +394,19 @@ async function loadFileList() {
   }
 }
 
-// ── 목록 렌더링 ──────────────────────────────────────────────────────────────
+// ── 목록 렌더링
 function fmtDate(d) {
   if (!d || d === "00000000") return "";
   return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
 }
 
 function renderList() {
-  const q = document.getElementById("search").value.toLowerCase();
-  const list = document.getElementById("file-list");
+  const q      = document.getElementById("search").value.toLowerCase();
+  const list   = document.getElementById("file-list");
+  const folder = TAB_FOLDERS[currentTab];
+  const cached = folderCache[folder] || [];
 
-  const items = allFiles.filter(f =>
+  const items = cached.filter(f =>
     f.category === currentTab &&
     (q === "" || f.label.toLowerCase().includes(q))
   );
@@ -386,16 +419,17 @@ function renderList() {
   list.innerHTML = items.map(f => {
     const isActive = activeItem === f.path;
     const esc = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const irBadge = currentTab === 'irdeck' ? '<span class="badge-ir">IR</span>' : '';
     return `
       <div class="file-item ${isActive ? "active" : ""}"
            onclick="openFile('${f.path}','${esc}','${f.htmlUrl}')">
-        <div class="fname">${f.label}</div>
+        <div class="fname">${f.label}${irBadge}</div>
         <div class="fdate">${fmtDate(f.date)}</div>
       </div>`;
   }).join("");
 }
 
-// ── 파일 열기 ────────────────────────────────────────────────────────────────
+// ── 파일 열기
 async function openFile(path, label, htmlUrl) {
   activeItem = path;
   renderList();
@@ -419,7 +453,7 @@ async function openFile(path, label, htmlUrl) {
   }
 }
 
-// ── 탭 전환 ──────────────────────────────────────────────────────────────────
+// ── 탭 전환
 function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll(".tab").forEach(el => {
@@ -430,10 +464,10 @@ function switchTab(tab) {
   document.getElementById("gh-link").style.display = "none";
   document.getElementById("md-body").style.display = "none";
   document.getElementById("empty-state").style.display = "flex";
-  renderList();
+  loadFileList();
 }
 
-// ── 시작 ────────────────────────────────────────────────────────────────────
+// ── 시작
 ghToken = getToken();
 if (!ghToken) {
   document.getElementById("token-overlay").style.display = "flex";
