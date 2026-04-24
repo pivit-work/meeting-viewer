@@ -400,7 +400,7 @@ function buildIframeHTML(code) {
     .join("\n")
     .replace(/\bexport\s+default\s+(function|class)\b/g, "$1");
 
-  const needsRecharts = /recharts/i.test(code);
+  const needsRecharts = /from\s+['"]recharts['"]/i.test(code);
 
   const rechartsScript = needsRecharts
     ? '<script src="https://unpkg.com/recharts/umd/Recharts.js"><\/script>' : "";
