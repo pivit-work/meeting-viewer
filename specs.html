@@ -395,8 +395,9 @@ function buildIframeHTML(code) {
   const compName = match ? match[1] : null;
 
   const processed = code
-    .replace(/^import\s[^;]+;?\s*$/gm, "")
+    .replace(/^import\b[\s\S]*?from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
     .replace(/\bexport\s+default\s+(function|class)\b/g, "$1")
+    .replace(/\bexport\s+(function|class|const|let|var)\b/g, "$1")
     .replace(/\bexport\s*\{[^}]*\}\s*;?/g, "");
 
   const needsRecharts = /from\s+['"]recharts['"]/i.test(code);
