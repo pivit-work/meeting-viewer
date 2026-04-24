@@ -411,13 +411,29 @@ function buildIframeHTML(code) {
         PieChart, Pie, ComposedChart } = Recharts;` : "";
 
   const renderCall = compName
-    ? `try {
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(${compName}));
-      } catch(e) {
-        document.getElementById('root').innerHTML =
-          '<div style="margin:24px;padding:16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;font-family:monospace;font-size:12px;color:#DC2626"><b>렌더링 오류</b><br><br>' + e.message + '</div>';
-      }`
+    ? `
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(e) { return { err: e }; }
+  render() {
+    if (this.state.err) {
+      return React.createElement('div', {
+        style: { margin:24, padding:16, background:'#FEF2F2', border:'1px solid #FECACA',
+          borderRadius:10, fontFamily:'monospace', fontSize:12, color:'#DC2626' }
+      }, React.createElement('b', null, '렌더링 오류'), React.createElement('br'), React.createElement('br'),
+         this.state.err.message, React.createElement('br'), React.createElement('br'),
+         React.createElement('pre', { style:{fontSize:10, whiteSpace:'pre-wrap', color:'#7f1d1d'} }, this.state.err.stack));
+    }
+    return this.props.children;
+  }
+}
+try {
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(React.createElement(ErrorBoundary, null, React.createElement(${compName})));
+} catch(e) {
+  document.getElementById('root').innerHTML =
+    '<div style="margin:24px;padding:16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;font-family:monospace;font-size:12px;color:#DC2626"><b>초기화 오류</b><br><br>' + e.message + '<br><br><pre style=\\"font-size:10px;white-space:pre-wrap\\">' + (e.stack||'') + '</pre></div>';
+}`
     : `document.getElementById('root').innerHTML =
         '<div style="padding:32px;color:#94A3B8;font-size:13px;text-align:center">export default 없음</div>';`;
 
@@ -435,6 +451,15 @@ ${rechartsScript}
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
 </style>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  document.getElementById('root').innerHTML =
+    '<div style="margin:24px;padding:16px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;font-family:monospace;font-size:12px;color:#9A3412">' +
+    '<b>전역 오류 (' + (src||'').split('/').pop() + ':' + line + ')</b><br><br>' + msg +
+    '<br><br><pre style="font-size:10px;white-space:pre-wrap">' + (err&&err.stack||'') + '</pre></div>';
+  return true;
+};
+<\/script>
 </head>
 <body>
 <div id="root"></div>
