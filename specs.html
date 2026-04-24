@@ -395,10 +395,9 @@ function buildIframeHTML(code) {
   const compName = match ? match[1] : null;
 
   const processed = code
-    .split("\n")
-    .filter(line => !line.trimStart().startsWith("import "))
-    .join("\n")
-    .replace(/\bexport\s+default\s+(function|class)\b/g, "$1");
+    .replace(/^import\s[^;]+;?\s*$/gm, "")
+    .replace(/\bexport\s+default\s+(function|class)\b/g, "$1")
+    .replace(/\bexport\s*\{[^}]*\}\s*;?/g, "");
 
   const needsRecharts = /from\s+['"]recharts['"]/i.test(code);
 
@@ -463,7 +462,7 @@ window.onerror = function(msg, src, line, col, err) {
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react,env">
+<script type="text/babel" data-presets="react">
 const {
   useState, useEffect, useRef, useCallback,
   useMemo, useReducer, useContext, createContext,
