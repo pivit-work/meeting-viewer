@@ -125,6 +125,17 @@
   .file-item .fdate  { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .file-item.active .fname { color: var(--accent); }
 
+  /* 디렉터리 그룹 헤더 */
+  .dir-header {
+    padding: 10px 16px 3px;
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.4px; user-select: none;
+    border-top: 1px solid var(--border);
+    margin-top: 2px;
+  }
+  .dir-header:first-child { border-top: none; margin-top: 0; }
+  .file-item.nested { padding-left: 24px; }
+
   /* 뱃지 */
   .badge {
     display: inline-block;
@@ -319,7 +330,11 @@ function resetToken() {
 
 // ── GitHub API (레포 파라미터 지원)
 async function ghGet(repo, path) {
-  const url = `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path)}`;
+  // 슬래시는 경로 구분자이므로 세그먼트별로 인코딩
+  const encodedPath = path
+    ? path.split('/').map(s => encodeURIComponent(s)).join('/')
+    : '';
+  const url = `https://api.github.com/repos/${repo}/contents/${encodedPath}`;
   const r = await fetch(url, {
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" },
   });
@@ -332,6 +347,27 @@ async function fetchText(repo, path) {
   const data = await ghGet(repo, path);
   const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
   return new TextDecoder("utf-8").decode(bytes);
+}
+
+// 하위 디렉터리 포함 재귀 파일 수집 (maxDepth = 최대 탐색 깊이)
+async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth = 3, depth = 0) {
+  const items = await ghGet(repo, dirPath);
+  if (!Array.isArray(items)) return [];
+  const results = [];
+  for (const item of items) {
+    if (item.type === 'file') {
+      if (item.name.endsWith('.md') || item.name.endsWith('.html')) {
+        const relPath = baseFolder ? item.path.slice(baseFolder.length + 1) : item.path;
+        const parts = relPath.split('/');
+        item._subdir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+        results.push(item);
+      }
+    } else if (item.type === 'dir' && depth < maxDepth) {
+      const sub = await fetchFilesRecursive(repo, item.path, baseFolder, maxDepth, depth + 1);
+      results.push(...sub);
+    }
+  }
+  return results;
 }
 
 // ── 파일 분류
@@ -382,8 +418,12 @@ async function loadFileList() {
       const isAutoRepo = repo.includes("meeting-automation");
       const isRootFolder = folder === "";
 
-      const files = await ghGet(repo, folder);
-      const filtered = files.filter(f => {
+      // 루트 폴더(화이트리스트)는 1단계만, 그 외는 하위 디렉터리까지 재귀 수집
+      const rawFiles = isRootFolder
+        ? await ghGet(repo, folder)
+        : await fetchFilesRecursive(repo, folder, folder);
+
+      const filtered = rawFiles.filter(f => {
         if (!f.name.endsWith(".md") && !f.name.endsWith(".html")) return false;
         if (AUTOMATION_EXCLUDE.includes(f.name)) return false;
         if (isRootFolder) return AUTOMATION_ROOT_FILES.includes(f.name);
@@ -396,6 +436,7 @@ async function loadFileList() {
         repo:    repo,
         htmlUrl: f.html_url,
         date:    parseDate(f.name),
+        subdir:  f._subdir || '',
         category: (() => {
           if (folder === "ir-deck")    return "irdeck";
           if (folder === "tech-talk")  return "techtalk";
@@ -426,9 +467,9 @@ function fmtDate(d) {
 }
 
 function renderList() {
-  const q       = document.getElementById("search").value.toLowerCase();
-  const list    = document.getElementById("file-list");
-  const cached  = folderCache[currentTab] || [];
+  const q      = document.getElementById("search").value.toLowerCase();
+  const list   = document.getElementById("file-list");
+  const cached = folderCache[currentTab] || [];
 
   const items = cached.filter(f =>
     f.category === currentTab &&
@@ -440,21 +481,48 @@ function renderList() {
     return;
   }
 
-  list.innerHTML = items.map(f => {
-    const isActive = activeItem === f.path;
-    const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    const escR = f.repo.replace(/'/g, "\\'");
-    let badge = "";
-    if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
-    if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
-    if (currentTab === "techtalk")   badge = f.isHtml ? `<span class="badge badge-tt">SLIDES</span>` : `<span class="badge badge-tt">TT</span>`;
-    return `
-      <div class="file-item ${isActive ? "active" : ""}"
-           onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
-        <div class="fname">${f.label} ${badge}</div>
-        <div class="fdate">${fmtDate(f.date)}</div>
-      </div>`;
-  }).join("");
+  // subdir별로 그룹핑
+  const groups = new Map();
+  for (const f of items) {
+    const key = f.subdir || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+
+  // 루트('')를 앞에, 나머지는 가나다순
+  const sortedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === '' && b !== '') return -1;
+    if (a !== '' && b === '') return 1;
+    return a.localeCompare(b, 'ko');
+  });
+
+  let html = '';
+  for (const key of sortedKeys) {
+    const groupItems = groups.get(key);
+    groupItems.sort((a, b) => b.date.localeCompare(a.date));
+
+    if (key) {
+      html += `<div class="dir-header">📁 ${key}</div>`;
+    }
+
+    for (const f of groupItems) {
+      const isActive = activeItem === f.path;
+      const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+      const escR = f.repo.replace(/'/g, "\\'");
+      let badge = "";
+      if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
+      if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
+      if (currentTab === "techtalk")   badge = f.isHtml ? `<span class="badge badge-tt">SLIDES</span>` : `<span class="badge badge-tt">TT</span>`;
+      html += `
+        <div class="file-item ${isActive ? "active" : ""} ${key ? "nested" : ""}"
+             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
+          <div class="fname">${f.label} ${badge}</div>
+          <div class="fdate">${fmtDate(f.date)}</div>
+        </div>`;
+    }
+  }
+
+  list.innerHTML = html;
 }
 
 // ── 파일 열기
