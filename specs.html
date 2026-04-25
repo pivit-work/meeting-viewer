@@ -259,10 +259,11 @@ async function loadTree() {
     const results = await Promise.all(folders.map(async f => {
       try {
         const files = await ghGet(f.path);
-        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx")).map(fi => ({
+        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx") || fi.name.endsWith(".html")).map(fi => ({
           name: fi.name,
           path: fi.path,
           htmlUrl: fi.html_url,
+          type: fi.name.endsWith(".html") ? "html" : "jsx",
         }));
         return { folder: f.name, files: jsxFiles };
       } catch { return { folder: f.name, files: [] }; }
@@ -315,9 +316,10 @@ function renderTree() {
       const item = document.createElement("div");
       item.className = "file-item" + (currentFile?.path === file.path ? " active" : "");
       item.dataset.path = file.path;
-      const label = file.name.replace(/\.jsx$/, "");
+      const label = file.name.replace(/\.(jsx|html)$/, "");
       const isNew = newPaths.has(file.path) && !seenPaths.has(file.path);
-      item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>${isNew ? '<span class="badge-new">NEW</span>' : ''}`;
+      const htmlBadge = file.type === "html" ? '<span style="font-size:9px;padding:1px 5px;background:#0d2a1a;color:#34d399;border:1px solid #065f46;border-radius:3px;margin-left:4px;font-weight:700">HTML</span>' : '';
+      item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>${htmlBadge}${isNew ? '<span class="badge-new">NEW</span>' : ''}`;
       item.onclick = () => selectFile(file, key);
       fl.appendChild(item);
     }
@@ -382,7 +384,8 @@ function showPreview() {
 
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
 
-  const blob = new Blob([buildIframeHTML(fileContent)], { type: "text/html" });
+  const iframeContent = currentFile?.type === "html" ? fileContent : buildIframeHTML(fileContent);
+  const blob = new Blob([iframeContent], { type: "text/html" });
   blobUrl = URL.createObjectURL(blob);
 
   const frame = document.getElementById("preview-frame");
