@@ -16,145 +16,122 @@
     --muted: #6b7280;
     --border: #e5e7eb;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
+    background: var(--bg); color: var(--text);
+    display: flex; height: 100vh; overflow: hidden;
   }
-
-  /* ── 토큰 오버레이 */
   #token-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.45);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 100;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
   }
   #token-box {
-    background: #fff; border-radius: 12px;
-    padding: 36px 32px; width: 420px;
+    background: #fff; border-radius: 12px; padding: 36px 32px; width: 420px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.15);
   }
   #token-box h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
   #token-box p  { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
   #token-box p a { color: var(--accent); }
   #token-input {
-    width: 100%; padding: 10px 12px;
-    border: 1px solid var(--border); border-radius: 8px;
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
     font-size: 13px; font-family: "SF Mono", Menlo, monospace;
     outline: none; margin-bottom: 12px; color: var(--text);
   }
   #token-input:focus { border-color: var(--accent); }
   #token-save-btn {
-    width: 100%; padding: 10px;
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
+    width: 100%; padding: 10px; background: var(--accent); color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   #token-save-btn:hover { opacity: 0.9; }
   #token-err { color: #ef4444; font-size: 12px; margin-top: 8px; display: none; }
 
-  /* ── 사이드바 */
   #sidebar {
-    width: var(--sidebar-width);
-    background: var(--sidebar-bg);
+    width: var(--sidebar-width); background: var(--sidebar-bg);
     border-right: 1px solid var(--border);
-    display: flex; flex-direction: column;
-    flex-shrink: 0; overflow: hidden;
+    display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
   }
   #sidebar-header {
-    padding: 20px 16px 12px;
-    border-bottom: 1px solid var(--border);
+    padding: 20px 16px 12px; border-bottom: 1px solid var(--border);
     display: flex; align-items: flex-start; justify-content: space-between;
   }
   #sidebar-header .logo { font-size: 15px; font-weight: 700; color: var(--accent); }
   #sidebar-header .sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
   #token-reset-btn {
-    font-size: 11px; color: var(--muted);
-    background: none; border: none; cursor: pointer;
-    padding: 2px 0; text-decoration: underline;
+    font-size: 11px; color: var(--muted); background: none; border: none;
+    cursor: pointer; padding: 2px 0; text-decoration: underline;
   }
-
-  /* ── 탭 (2줄 레이아웃) */
   #tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    border-bottom: 1px solid var(--border);
-    padding: 0 8px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--border); padding: 0 8px;
   }
   .tab {
-    padding: 8px 2px;
-    text-align: center; font-size: 10px; font-weight: 600;
-    color: var(--muted); cursor: pointer;
-    border-bottom: 2px solid transparent;
+    padding: 8px 2px; text-align: center; font-size: 10px; font-weight: 600;
+    color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
     transition: all 0.15s; user-select: none;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  #search-wrap { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  /* 검색 영역 */
+  #search-wrap {
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #search-row { display: flex; gap: 6px; }
   #search {
-    width: 100%; padding: 7px 10px;
-    border: 1px solid var(--border); border-radius: 6px;
+    flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px;
     font-size: 12px; background: var(--bg); color: var(--text); outline: none;
   }
   #search:focus { border-color: var(--accent); }
+  #content-search-btn {
+    padding: 7px 10px; background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  #content-search-btn:hover { opacity: 0.85; }
+  #search-status { font-size: 11px; color: var(--muted); display: none; }
 
   #file-list { overflow-y: auto; flex: 1; padding: 6px 0; }
-
   .file-item {
-    padding: 9px 16px; cursor: pointer;
-    border-left: 3px solid transparent;
+    padding: 9px 16px; cursor: pointer; border-left: 3px solid transparent;
     transition: background 0.1s;
   }
   .file-item:hover { background: var(--bg); }
-  .file-item.active {
-    background: var(--accent-light);
-    border-left-color: var(--accent);
-  }
+  .file-item.active { background: var(--accent-light); border-left-color: var(--accent); }
   .file-item .fname {
     font-size: 12px; font-weight: 500; color: var(--text);
     line-height: 1.4; word-break: break-word;
     display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
   }
   .file-item .fdate  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-item .fsnip  {
+    font-size: 11px; color: #6b7280; margin-top: 4px;
+    line-height: 1.5; word-break: break-word;
+    border-left: 2px solid var(--accent); padding-left: 6px;
+  }
   .file-item.active .fname { color: var(--accent); }
-
-  /* 디렉터리 그룹 헤더 */
   .dir-header {
-    padding: 10px 16px 3px;
-    font-size: 10px; font-weight: 700; color: var(--muted);
+    padding: 10px 16px 3px; font-size: 10px; font-weight: 700; color: var(--muted);
     letter-spacing: 0.4px; user-select: none;
-    border-top: 1px solid var(--border);
-    margin-top: 2px;
+    border-top: 1px solid var(--border); margin-top: 2px;
   }
   .dir-header:first-child { border-top: none; margin-top: 0; }
   .file-item.nested { padding-left: 24px; }
-
-  /* 뱃지 */
   .badge {
-    display: inline-block;
-    font-size: 9px; font-weight: 700; letter-spacing: .3px;
-    border-radius: 4px; padding: 1px 5px;
-    flex-shrink: 0;
+    display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .3px;
+    border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
   }
   .badge-ir   { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
   .badge-auto { background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; }
   .badge-tt   { background: #eff6ff; color: #1e40af; border: 1px solid #93c5fd; }
+  .badge-arch { background: #f3e8ff; color: #6b21a8; border: 1px solid #c084fc; }
+  .badge-back { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 
-  /* ── 메인 */
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
   #toolbar {
-    padding: 14px 28px;
-    border-bottom: 1px solid var(--border);
-    background: #fff;
-    display: flex; align-items: center; gap: 12px;
-    flex-shrink: 0;
+    padding: 14px 28px; border-bottom: 1px solid var(--border); background: #fff;
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0;
   }
   #doc-title { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
   #gh-link {
@@ -164,8 +141,6 @@
   }
   #gh-link:hover { background: var(--accent-light); }
   #content { flex: 1; overflow-y: auto; padding: 40px 60px; }
-
-  /* 마크다운 */
   #md-body { max-width: 780px; margin: 0 auto; }
   #md-body h1 { font-size: 24px; font-weight: 700; margin-bottom: 16px; line-height: 1.3; }
   #md-body h2 { font-size: 18px; font-weight: 700; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
@@ -186,14 +161,7 @@
   #md-body td { padding: 8px 12px; border: 1px solid var(--border); line-height: 1.6; }
   #md-body tr:nth-child(even) td { background: #fafafa; }
   #md-body input[type="checkbox"] { margin-right: 6px; }
-
-  /* HTML 슬라이드 iframe */
-  #html-frame {
-    width: 100%; height: 100%;
-    border: none; display: none;
-    background: #fff;
-  }
-
+  #html-frame { width: 100%; height: 100%; border: none; display: none; background: #fff; }
   #empty-state {
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
@@ -201,7 +169,6 @@
   }
   #empty-state .icon { font-size: 40px; }
   #empty-state .msg  { font-size: 14px; }
-
   .loading {
     display: flex; align-items: center; justify-content: center;
     height: 100%; color: var(--muted); font-size: 14px; gap: 8px;
@@ -212,16 +179,12 @@
     border-radius: 50%; animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 640px) {
-    #sidebar { width: 220px; }
-    #content { padding: 24px 20px; }
-  }
+  mark { background: #fef08a; border-radius: 2px; padding: 0 2px; }
+  @media (max-width: 640px) { #sidebar { width: 220px; } #content { padding: 24px 20px; } }
 </style>
 </head>
 <body>
 
-<!-- 토큰 오버레이 -->
 <div id="token-overlay" style="display:none">
   <div id="token-box">
     <h2>🔐 GitHub 접근 설정</h2>
@@ -236,12 +199,11 @@
   </div>
 </div>
 
-<!-- 사이드바 -->
 <div id="sidebar">
   <div id="sidebar-header">
     <div>
       <div class="logo">PIVIT 문서 뷰어</div>
-      <div class="sub">회의록 · 기획 · IR · 자동화 · Tech Talk</div>
+      <div class="sub">회의록 · 기획 · 아키텍처 · IR · 자동화 · Tech Talk</div>
     </div>
     <button id="token-reset-btn" onclick="resetToken()">토큰 재설정</button>
   </div>
@@ -249,13 +211,18 @@
   <div id="tabs">
     <div class="tab active" data-tab="minutes"    onclick="switchTab('minutes')">회의록</div>
     <div class="tab"        data-tab="planning"   onclick="switchTab('planning')">기획 문서</div>
+    <div class="tab"        data-tab="arch"       onclick="switchTab('arch')">아키텍처</div>
     <div class="tab"        data-tab="irdeck"     onclick="switchTab('irdeck')">IR Deck</div>
     <div class="tab"        data-tab="automation" onclick="switchTab('automation')">자동 프로세스</div>
     <div class="tab"        data-tab="techtalk"   onclick="switchTab('techtalk')">Tech Talk</div>
   </div>
 
   <div id="search-wrap">
-    <input id="search" type="text" placeholder="파일 검색..." oninput="renderList()" />
+    <div id="search-row">
+      <input id="search" type="text" placeholder="파일명 검색..." oninput="onSearchInput()" />
+      <button id="content-search-btn" onclick="searchContent()" title="회의록 전체 내용에서 결정사항 검색">🔍 전체검색</button>
+    </div>
+    <div id="search-status"></div>
   </div>
 
   <div id="file-list">
@@ -263,7 +230,6 @@
   </div>
 </div>
 
-<!-- 메인 -->
 <div id="main">
   <div id="toolbar">
     <div id="doc-title">파일을 선택하세요</div>
@@ -282,31 +248,29 @@
 <script>
 const LS_KEY = "pivit_gh_token";
 
-// 탭별 소스 설정 (레포 + 폴더 분리)
 const TAB_SOURCES = {
-  minutes:    [{ repo: "pivit-work/team-wiki",                folder: "회의록" }],
-  planning:   [{ repo: "pivit-work/team-wiki",                folder: "기획내용" }],
-  irdeck:     [{ repo: "pivit-work/team-wiki",                folder: "ir-deck" }],
+  minutes:    [{ repo: "pivit-work/team-wiki", folder: "회의록" }],
+  planning:   [{ repo: "pivit-work/team-wiki", folder: "기획내용" }],
+  arch:       [{ repo: "pivit-work/team-wiki", folder: "아키텍처" }],
+  irdeck:     [{ repo: "pivit-work/team-wiki", folder: "ir-deck" }],
   automation: [
-    { repo: "pivit-work/team-wiki",                           folder: "" },
-    { repo: "pivit-work/pivit-meeting-automation",            folder: "docs" },
+    { repo: "pivit-work/team-wiki",                        folder: "" },
+    { repo: "pivit-work/pivit-meeting-automation",         folder: "docs" },
   ],
-  techtalk:   [{ repo: "pivit-work/team-wiki",                folder: "tech-talk" }],
+  techtalk:   [{ repo: "pivit-work/team-wiki",             folder: "tech-talk" }],
 };
 
-// automation 탭에서 team-wiki 루트 중 보여줄 파일 (화이트리스트)
 const AUTOMATION_ROOT_FILES = ["automation-alerts.md"];
+const AUTOMATION_EXCLUDE    = ["meeting-transcript-2026-03-26.md"];
+const ALLOWED_EXT = [".md", ".html", ".jsx"];
 
-// 자동화 탭에서 제외할 파일 (transcript 원본은 회의록 탭에 있음)
-const AUTOMATION_EXCLUDE = ["meeting-transcript-2026-03-26.md"];
+let folderCache    = {};
+let contentCache   = {};  // path → text (회의록 전체검색용)
+let currentTab     = "minutes";
+let activeItem     = null;
+let ghToken        = "";
+let searchResults  = null; // null = 파일명 모드, array = 전체검색 결과 모드
 
-// 캐시 키: "repo/folder"
-let folderCache = {};
-let currentTab  = "minutes";
-let activeItem  = null;
-let ghToken     = "";
-
-// ── 토큰 관리
 function getToken() { return localStorage.getItem(LS_KEY) || ""; }
 
 function saveToken() {
@@ -328,12 +292,8 @@ function resetToken() {
   document.getElementById("token-overlay").style.display = "flex";
 }
 
-// ── GitHub API (레포 파라미터 지원)
 async function ghGet(repo, path) {
-  // 슬래시는 경로 구분자이므로 세그먼트별로 인코딩
-  const encodedPath = path
-    ? path.split('/').map(s => encodeURIComponent(s)).join('/')
-    : '';
+  const encodedPath = path ? path.split('/').map(s => encodeURIComponent(s)).join('/') : '';
   const url = `https://api.github.com/repos/${repo}/contents/${encodedPath}`;
   const r = await fetch(url, {
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" },
@@ -344,24 +304,22 @@ async function ghGet(repo, path) {
 }
 
 async function fetchText(repo, path) {
-  const data = await ghGet(repo, path);
+  const data  = await ghGet(repo, path);
   const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
   return new TextDecoder("utf-8").decode(bytes);
 }
 
-// 하위 디렉터리 포함 재귀 파일 수집 (maxDepth = 최대 탐색 깊이)
 async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth = 3, depth = 0) {
   const items = await ghGet(repo, dirPath);
   if (!Array.isArray(items)) return [];
   const results = [];
   for (const item of items) {
-    if (item.type === 'file') {
-      if (item.name.endsWith('.md') || item.name.endsWith('.html')) {
-        const relPath = baseFolder ? item.path.slice(baseFolder.length + 1) : item.path;
-        const parts = relPath.split('/');
-        item._subdir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
-        results.push(item);
-      }
+    const ext = "." + item.name.split('.').pop();
+    if (item.type === 'file' && ALLOWED_EXT.includes(ext)) {
+      const relPath = baseFolder ? item.path.slice(baseFolder.length + 1) : item.path;
+      const parts   = relPath.split('/');
+      item._subdir  = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+      results.push(item);
     } else if (item.type === 'dir' && depth < maxDepth) {
       const sub = await fetchFilesRecursive(repo, item.path, baseFolder, maxDepth, depth + 1);
       results.push(...sub);
@@ -370,84 +328,79 @@ async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth = 3, dept
   return results;
 }
 
-// ── 파일 분류
 function parseDate(name) {
   const m = name.match(/(\d{8})/);
   return m ? m[1] : "00000000";
 }
 
 function categorize(name) {
-  if (/^pivit_feature_/.test(name) || /earnest/i.test(name) || /feedback.*평가/i.test(name)) return "planning";
+  if (/^pivit_feature_/.test(name) || /earnest/i.test(name)) return "planning";
   return "minutes";
 }
 
-// ── 자동화 파일 레이블 정제
 const AUTO_LABELS = {
-  "implementation-status":             "구현 현황 (Implementation Status)",
+  "implementation-status":             "구현 현황",
   "meeting-notes-automation-pipeline": "회의록 자동화 파이프라인 설계",
-  "project-handoff":                   "프로젝트 핸드오프 문서",
+  "project-handoff":                   "프로젝트 핸드오프",
   "automation-alerts":                 "자동화 & 얼럿 전체 목록",
-  "TT01_github-doc-management":        "Tech Talk #01 — GitHub로 팀 문서 관리하기",
-  "TT02_harness-engineering":          "Tech Talk #02 — 기획자가 만든 AI 업무 자동화 구조",
-  "TT02_harness-engineering-slides":   "Tech Talk #02 슬라이드 ▶",
-  "claude-code-guide-slides":          "Claude Code 가이드 슬라이드 ▶",
 };
 
 function autoLabel(name) {
-  const key = name.replace(/\.md$/, "");
+  const key = name.replace(/\.(md|html|jsx)$/, "");
   return AUTO_LABELS[key] || key;
 }
 
-// ── 파일 목록 로드
-async function loadFileList() {
-  const sources = TAB_SOURCES[currentTab];
-  const cacheKey = currentTab;
+function fileLabel(f, folder) {
+  if (folder === "docs" || folder === "" || folder === "tech-talk")
+    return autoLabel(f.name);
+  return f.name.replace(/\.(md|html|jsx)$/, "");
+}
 
-  if (folderCache[cacheKey]) {
-    renderList();
-    return;
-  }
+async function loadFileList() {
+  const sources  = TAB_SOURCES[currentTab];
+  const cacheKey = currentTab;
+  if (folderCache[cacheKey]) { renderList(); return; }
 
   document.getElementById("file-list").innerHTML =
     `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
 
   try {
     const allMapped = [];
-
     for (const { repo, folder } of sources) {
-      const isAutoRepo = repo.includes("meeting-automation");
+      const isAutoRepo   = repo.includes("meeting-automation");
       const isRootFolder = folder === "";
 
-      // 루트 폴더(화이트리스트)는 1단계만, 그 외는 하위 디렉터리까지 재귀 수집
       const rawFiles = isRootFolder
         ? await ghGet(repo, folder)
         : await fetchFilesRecursive(repo, folder, folder);
 
       const filtered = rawFiles.filter(f => {
-        if (!f.name.endsWith(".md") && !f.name.endsWith(".html")) return false;
+        const ext = "." + f.name.split('.').pop();
+        if (!ALLOWED_EXT.includes(ext)) return false;
         if (AUTOMATION_EXCLUDE.includes(f.name)) return false;
         if (isRootFolder) return AUTOMATION_ROOT_FILES.includes(f.name);
         return true;
       });
 
       const mapped = filtered.map(f => ({
-        name:    f.name,
-        path:    f.path,
-        repo:    repo,
-        htmlUrl: f.html_url,
-        date:    parseDate(f.name),
-        subdir:  f._subdir || '',
+        name:     f.name,
+        path:     f.path,
+        repo:     repo,
+        htmlUrl:  f.html_url,
+        date:     parseDate(f.name),
+        subdir:   f._subdir || '',
         category: (() => {
-          if (folder === "ir-deck")    return "irdeck";
-          if (folder === "tech-talk")  return "techtalk";
-          if (folder === "기획내용")   return "planning";
+          if (folder === "아키텍처")  return "arch";
+          if (folder === "ir-deck")  return "irdeck";
+          if (folder === "tech-talk") return "techtalk";
+          if (folder === "기획내용")  return "planning";
           if (folder === "docs" || isRootFolder || isAutoRepo) return "automation";
           return categorize(f.name);
         })(),
-        label: (folder === "docs" || isRootFolder || folder === "tech-talk") ? autoLabel(f.name) : f.name.replace(/\.(md|html)$/, ""),
+        label:  fileLabel(f, folder),
         isHtml: f.name.endsWith('.html'),
+        isJsx:  f.name.endsWith('.jsx'),
       }));
-
       allMapped.push(...mapped);
     }
 
@@ -460,7 +413,58 @@ async function loadFileList() {
   }
 }
 
-// ── 목록 렌더링
+// ── 전체 내용 검색 (회의록 탭)
+async function searchContent() {
+  const q = document.getElementById("search").value.trim();
+  if (!q) { searchResults = null; renderList(); return; }
+
+  const status = document.getElementById("search-status");
+  status.style.display = "block";
+  status.textContent = "전체 검색 중...";
+
+  const cached = folderCache[currentTab] || [];
+  const minutes = cached.filter(f => f.category === currentTab);
+
+  const results = [];
+  let done = 0;
+  for (const f of minutes) {
+    try {
+      let text = contentCache[f.path];
+      if (!text) {
+        text = await fetchText(f.repo, f.path);
+        contentCache[f.path] = text;
+      }
+      const lower = text.toLowerCase();
+      const qLow  = q.toLowerCase();
+      const idx   = lower.indexOf(qLow);
+      if (idx !== -1) {
+        const snip = text.slice(Math.max(0, idx - 60), idx + 120)
+          .replace(/\n/g, " ").replace(/#+\s*/g, "").trim();
+        const highlighted = snip.replace(
+          new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+          m => `<mark>${m}</mark>`
+        );
+        results.push({ ...f, snippet: highlighted });
+      }
+    } catch (_) {}
+    done++;
+    status.textContent = `전체 검색 중... (${done}/${minutes.length})`;
+  }
+
+  searchResults = results;
+  status.textContent = `"${q}" 검색 결과: ${results.length}개 파일`;
+  renderList();
+}
+
+function onSearchInput() {
+  if (searchResults !== null) {
+    // 전체검색 모드 해제
+    searchResults = null;
+    document.getElementById("search-status").style.display = "none";
+  }
+  renderList();
+}
+
 function fmtDate(d) {
   if (!d || d === "00000000") return "";
   return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
@@ -471,9 +475,33 @@ function renderList() {
   const list   = document.getElementById("file-list");
   const cached = folderCache[currentTab] || [];
 
+  // 전체검색 결과 모드
+  if (searchResults !== null) {
+    if (searchResults.length === 0) {
+      list.innerHTML = `<div style="padding:20px 16px;font-size:12px;color:#9ca3af;text-align:center">검색 결과 없음</div>`;
+      return;
+    }
+    let html = '';
+    for (const f of searchResults) {
+      const isActive = activeItem === f.path;
+      const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+      const escR = f.repo.replace(/'/g, "\\'");
+      html += `
+        <div class="file-item ${isActive ? "active" : ""}"
+             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
+          <div class="fname">${f.label}</div>
+          <div class="fdate">${fmtDate(f.date)}</div>
+          <div class="fsnip">${f.snippet}</div>
+        </div>`;
+    }
+    list.innerHTML = html;
+    return;
+  }
+
+  // 파일명 검색 모드
   const items = cached.filter(f =>
     f.category === currentTab &&
-    (q === "" || f.label.toLowerCase().includes(q))
+    (q === "" || f.label.toLowerCase().includes(q) || f.subdir.toLowerCase().includes(q))
   );
 
   if (items.length === 0) {
@@ -481,7 +509,6 @@ function renderList() {
     return;
   }
 
-  // subdir별로 그룹핑
   const groups = new Map();
   for (const f of items) {
     const key = f.subdir || '';
@@ -489,7 +516,6 @@ function renderList() {
     groups.get(key).push(f);
   }
 
-  // 루트('')를 앞에, 나머지는 가나다순
   const sortedKeys = [...groups.keys()].sort((a, b) => {
     if (a === '' && b !== '') return -1;
     if (a !== '' && b === '') return 1;
@@ -500,11 +526,7 @@ function renderList() {
   for (const key of sortedKeys) {
     const groupItems = groups.get(key);
     groupItems.sort((a, b) => b.date.localeCompare(a.date));
-
-    if (key) {
-      html += `<div class="dir-header">📁 ${key}</div>`;
-    }
-
+    if (key) html += `<div class="dir-header">📁 ${key}</div>`;
     for (const f of groupItems) {
       const isActive = activeItem === f.path;
       const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
@@ -513,71 +535,63 @@ function renderList() {
       if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
       if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
       if (currentTab === "techtalk")   badge = f.isHtml ? `<span class="badge badge-tt">SLIDES</span>` : `<span class="badge badge-tt">TT</span>`;
+      if (currentTab === "arch")       badge = f.isJsx ? `<span class="badge badge-arch">JSX</span>` : (f.isHtml ? `<span class="badge badge-arch">HTML</span>` : `<span class="badge badge-arch">ARCH</span>`);
+      if (f.name.includes("backlog"))  badge = `<span class="badge badge-back">BACKLOG</span>`;
       html += `
         <div class="file-item ${isActive ? "active" : ""} ${key ? "nested" : ""}"
-             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
+             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}','${f.isJsx||false}')">
           <div class="fname">${f.label} ${badge}</div>
           <div class="fdate">${fmtDate(f.date)}</div>
         </div>`;
     }
   }
-
   list.innerHTML = html;
 }
 
-// ── 파일 열기
-async function openFile(path, label, htmlUrl, repo, isHtml) {
+async function openFile(path, label, htmlUrl, repo, isHtml, isJsx) {
   activeItem = path;
   renderList();
 
   document.getElementById("doc-title").textContent = label;
   const lnk = document.getElementById("gh-link");
-  lnk.href = htmlUrl;
-  lnk.style.display = "inline-block";
+  lnk.href = htmlUrl; lnk.style.display = "inline-block";
 
-  const mdBody   = document.getElementById("md-body");
-  const frame    = document.getElementById("html-frame");
-  const empty    = document.getElementById("empty-state");
-  const content  = document.getElementById("content");
-
+  const mdBody  = document.getElementById("md-body");
+  const frame   = document.getElementById("html-frame");
+  const empty   = document.getElementById("empty-state");
+  const content = document.getElementById("content");
   empty.style.display = "none";
 
   if (isHtml === "true") {
-    // HTML 슬라이드: iframe srcdoc으로 렌더링
-    mdBody.style.display = "none";
-    frame.style.display  = "none";
-    frame.srcdoc = "";
-
     mdBody.style.display = "block";
     mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
-
+    frame.style.display = "none"; frame.srcdoc = "";
     try {
-      const data  = await ghGet(repo, path);
-      const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+      const data      = await ghGet(repo, path);
+      const bytes     = Uint8Array.from(atob(data.content.replace(/\n/g,"")), c=>c.charCodeAt(0));
       const htmlContent = new TextDecoder("utf-8").decode(bytes);
-
       mdBody.style.display = "none";
-      frame.srcdoc         = htmlContent;
-      frame.style.display  = "block";
-      // iframe은 content div 안에서 height:100% 맞추기
-      content.style.padding = "0";
-      content.style.overflow = "hidden";
+      frame.srcdoc = htmlContent; frame.style.display = "block";
+      content.style.padding = "0"; content.style.overflow = "hidden";
     } catch (e) {
       mdBody.style.display = "block";
-      mdBody.innerHTML = `<p style="color:#ef4444">슬라이드 로드 실패: ${e.message}</p>`;
+      mdBody.innerHTML = `<p style="color:#ef4444">로드 실패: ${e.message}</p>`;
     }
   } else {
-    // Markdown 렌더링
-    frame.style.display  = "none";
-    frame.srcdoc         = "";
-    content.style.padding = "";
-    content.style.overflow = "";
+    frame.style.display = "none"; frame.srcdoc = "";
+    content.style.padding = ""; content.style.overflow = "";
     mdBody.style.display = "block";
     mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
-
     try {
-      const text = await fetchText(repo, path);
-      mdBody.innerHTML = marked.parse(text);
+      const text = contentCache[path] || await fetchText(repo, path);
+      contentCache[path] = text;
+      if (isJsx === "true") {
+        // JSX → 코드 블록으로 렌더링
+        const escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        mdBody.innerHTML = `<pre><code>${escaped}</code></pre>`;
+      } else {
+        mdBody.innerHTML = marked.parse(text);
+      }
       content.scrollTop = 0;
     } catch (e) {
       mdBody.innerHTML = `<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`;
@@ -585,12 +599,15 @@ async function openFile(path, label, htmlUrl, repo, isHtml) {
   }
 }
 
-// ── 탭 전환
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll(".tab").forEach(el => {
-    el.classList.toggle("active", el.dataset.tab === tab);
-  });
+  searchResults = null;
+  document.getElementById("search-status").style.display = "none";
+  document.getElementById("search").value = "";
+  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.tab === tab));
+  // 아키텍처 탭에서는 전체검색 버튼 숨김
+  document.getElementById("content-search-btn").style.display =
+    (tab === "minutes") ? "inline-block" : "none";
   activeItem = null;
   document.getElementById("doc-title").textContent = "파일을 선택하세요";
   document.getElementById("gh-link").style.display = "none";
@@ -602,12 +619,13 @@ function switchTab(tab) {
   loadFileList();
 }
 
-// ── 시작
 ghToken = getToken();
 if (!ghToken) {
   document.getElementById("token-overlay").style.display = "flex";
   document.getElementById("file-list").innerHTML = "";
 } else {
+  // 초기 탭 세팅: 아키텍처 탭에서는 전체검색 버튼 숨김
+  document.getElementById("content-search-btn").style.display = "inline-block";
   loadFileList();
 }
 </script>
