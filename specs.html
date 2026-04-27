@@ -259,11 +259,11 @@ async function loadTree() {
     const results = await Promise.all(folders.map(async f => {
       try {
         const files = await ghGet(f.path);
-        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx") || fi.name.endsWith(".html")).map(fi => ({
+        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx") || fi.name.endsWith(".html") || fi.name.endsWith(".md")).map(fi => ({
           name: fi.name,
           path: fi.path,
           htmlUrl: fi.html_url,
-          type: fi.name.endsWith(".html") ? "html" : "jsx",
+          type: fi.name.endsWith(".html") ? "html" : fi.name.endsWith(".md") ? "md" : "jsx",
         }));
         return { folder: f.name, files: jsxFiles };
       } catch { return { folder: f.name, files: [] }; }
@@ -316,9 +316,11 @@ function renderTree() {
       const item = document.createElement("div");
       item.className = "file-item" + (currentFile?.path === file.path ? " active" : "");
       item.dataset.path = file.path;
-      const label = file.name.replace(/\.(jsx|html)$/, "");
+      const label = file.name.replace(/\.(jsx|html|md)$/, "");
       const isNew = newPaths.has(file.path) && !seenPaths.has(file.path);
-      const htmlBadge = file.type === "html" ? '<span style="font-size:9px;padding:1px 5px;background:#0d2a1a;color:#34d399;border:1px solid #065f46;border-radius:3px;margin-left:4px;font-weight:700">HTML</span>' : '';
+      const htmlBadge = file.type === "html" ? '<span style="font-size:9px;padding:1px 5px;background:#0d2a1a;color:#34d399;border:1px solid #065f46;border-radius:3px;margin-left:4px;font-weight:700">HTML</span>'
+                      : file.type === "md"   ? '<span style="font-size:9px;padding:1px 5px;background:#0d1a2e;color:#60a5fa;border:1px solid #1e3a5f;border-radius:3px;margin-left:4px;font-weight:700">MD</span>'
+                      : '';
       item.innerHTML = `<span class="file-dot" style="background:${currentFile?.path === file.path ? '#4F6AF5' : '#2D3748'}"></span><span class="file-name" title="${file.name}">${label}</span>${htmlBadge}${isNew ? '<span class="badge-new">NEW</span>' : ''}`;
       item.onclick = () => selectFile(file, key);
       fl.appendChild(item);
@@ -384,13 +386,75 @@ function showPreview() {
 
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
 
-  const iframeContent = currentFile?.type === "html" ? fileContent : buildIframeHTML(fileContent);
+  const iframeContent = currentFile?.type === "html" ? fileContent
+                      : currentFile?.type === "md"   ? buildMarkdownHTML(fileContent)
+                      : buildIframeHTML(fileContent);
   const blob = new Blob([iframeContent], { type: "text/html" });
   blobUrl = URL.createObjectURL(blob);
 
   const frame = document.getElementById("preview-frame");
   frame.onload = () => loader.classList.add("done");
   frame.src = blobUrl;
+}
+
+function buildMarkdownHTML(md) {
+  // 간단한 마크다운 → HTML 변환 (marked.js 없이 인라인 처리)
+  const escaped = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const html = escaped
+    // 코드 블록
+    .replace(/```[\s\S]*?```/g, m => {
+      const code = m.replace(/^```[^\n]*\n?/,'').replace(/\n?```$/,'');
+      return `<pre><code>${code}</code></pre>`;
+    })
+    // 인라인 코드
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // 제목
+    .replace(/^#### (.+)$/gm,'<h4>$1</h4>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    // 굵게, 기울임
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    // 인용
+    .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>')
+    // 표 (thead 첫 행)
+    .replace(/^\|(.+)\|$/gm, row => {
+      const cells = row.split('|').filter((_,i,a)=>i>0&&i<a.length-1);
+      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+    })
+    .replace(/^\|[-| :]+\|$/gm,'')
+    // 수평선
+    .replace(/^---$/gm,'<hr>')
+    // 목록
+    .replace(/^- (.+)$/gm,'<li>$1</li>')
+    // 단락
+    .replace(/\n\n/g,'</p><p>')
+    // 줄바꿈
+    .replace(/\n/g,'<br>');
+
+  return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.8;color:#1e293b;max-width:860px;margin:0 auto;padding:32px 40px;background:#fff}
+  h1{font-size:22px;font-weight:800;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:10px;margin:0 0 20px}
+  h2{font-size:17px;font-weight:700;color:#1e293b;margin:28px 0 10px;padding-left:10px;border-left:3px solid #4f6af5}
+  h3{font-size:14px;font-weight:700;color:#334155;margin:20px 0 8px}
+  h4{font-size:13px;font-weight:700;color:#475569;margin:14px 0 6px}
+  p{margin:8px 0;color:#334155}
+  blockquote{border-left:3px solid #cbd5e1;margin:12px 0;padding:8px 14px;background:#f8fafc;color:#475569;border-radius:0 6px 6px 0;font-style:italic}
+  pre{background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:12px 0}
+  code{background:#f1f5f9;color:#4f6af5;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:'DM Mono','Fira Code',monospace}
+  pre code{background:none;color:inherit;padding:0}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+  tr:first-child td{background:#f1f5f9;font-weight:700;color:#1e293b}
+  td{padding:8px 12px;border:1px solid #e2e8f0;color:#334155;vertical-align:top}
+  tr:nth-child(even) td{background:#f8fafc}
+  li{margin:3px 0;color:#334155}
+  hr{border:none;border-top:1px solid #e2e8f0;margin:20px 0}
+  strong{color:#1e293b}
+</style></head><body><p>${html}</p></body></html>`;
 }
 
 function buildIframeHTML(code) {
