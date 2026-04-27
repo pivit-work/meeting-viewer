@@ -7,14 +7,9 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
-    --bg: #f7f8fa;
-    --sidebar-bg: #fff;
-    --sidebar-width: 280px;
-    --accent: #4f6ef7;
-    --accent-light: #eef1fe;
-    --text: #1a1a2e;
-    --muted: #6b7280;
-    --border: #e5e7eb;
+    --bg: #f7f8fa; --sidebar-bg: #fff; --sidebar-width: 280px;
+    --accent: #4f6ef7; --accent-light: #eef1fe;
+    --text: #1a1a2e; --muted: #6b7280; --border: #e5e7eb;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -46,6 +41,30 @@
   #token-save-btn:hover { opacity: 0.9; }
   #token-err { color: #ef4444; font-size: 12px; margin-top: 8px; display: none; }
 
+  /* Claude API 키 오버레이 */
+  #claude-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  #claude-box {
+    background: #fff; border-radius: 12px; padding: 36px 32px; width: 440px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  }
+  #claude-box h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  #claude-box p  { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
+  #claude-key-input {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: "SF Mono", Menlo, monospace;
+    outline: none; margin-bottom: 12px; color: var(--text);
+  }
+  #claude-key-input:focus { border-color: #7c3aed; }
+  #claude-save-btn {
+    width: 100%; padding: 10px; background: #7c3aed; color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  #claude-save-btn:hover { opacity: 0.9; }
+  #claude-err { color: #ef4444; font-size: 12px; margin-top: 8px; display: none; }
+
   #sidebar {
     width: var(--sidebar-width); background: var(--sidebar-bg);
     border-right: 1px solid var(--border);
@@ -72,8 +91,7 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-  /* 검색 영역 */
+  .tab.ai-tab.active { color: #7c3aed; border-bottom-color: #7c3aed; }
   #search-wrap {
     padding: 8px 12px; border-bottom: 1px solid var(--border);
     display: flex; flex-direction: column; gap: 6px;
@@ -91,7 +109,6 @@
   }
   #content-search-btn:hover { opacity: 0.85; }
   #search-status { font-size: 11px; color: var(--muted); display: none; }
-
   #file-list { overflow-y: auto; flex: 1; padding: 6px 0; }
   .file-item {
     padding: 9px 16px; cursor: pointer; border-left: 3px solid transparent;
@@ -128,6 +145,26 @@
   .badge-arch { background: #f3e8ff; color: #6b21a8; border: 1px solid #c084fc; }
   .badge-back { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 
+  /* AI 사이드바 */
+  #ai-sidebar-content {
+    display: none; flex-direction: column;
+    flex: 1; overflow: hidden; padding: 12px; gap: 8px;
+  }
+  #ai-sidebar-content.visible { display: flex; }
+  .ai-quick-label {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.4px; padding: 4px 0 2px;
+  }
+  .ai-quick-btn {
+    width: 100%; text-align: left; padding: 8px 10px; font-size: 11px;
+    background: #f5f3ff; color: #5b21b6; border: 1px solid #ddd6fe;
+    border-radius: 6px; cursor: pointer; line-height: 1.4;
+  }
+  .ai-quick-btn:hover { background: #ede9fe; }
+  .ai-claude-key { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+  .ai-key-status { font-size: 10px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; }
+  .ai-key-reset { font-size: 10px; color: #7c3aed; background: none; border: none; cursor: pointer; text-decoration: underline; }
+
   #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
   #toolbar {
     padding: 14px 28px; border-bottom: 1px solid var(--border); background: #fff;
@@ -162,24 +199,58 @@
   #md-body tr:nth-child(even) td { background: #fafafa; }
   #md-body input[type="checkbox"] { margin-right: 6px; }
   #html-frame { width: 100%; height: 100%; border: none; display: none; background: #fff; }
-  #empty-state {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    height: 100%; color: var(--muted); gap: 10px;
-  }
+  #empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); gap: 10px; }
   #empty-state .icon { font-size: 40px; }
   #empty-state .msg  { font-size: 14px; }
-  .loading {
-    display: flex; align-items: center; justify-content: center;
-    height: 100%; color: var(--muted); font-size: 14px; gap: 8px;
-  }
-  .spinner {
-    width: 18px; height: 18px;
-    border: 2px solid var(--border); border-top-color: var(--accent);
-    border-radius: 50%; animation: spin 0.7s linear infinite;
-  }
+  .loading { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 14px; gap: 8px; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   mark { background: #fef08a; border-radius: 2px; padding: 0 2px; }
+
+  /* AI 채팅 패널 */
+  #ai-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; background: #0f172a; }
+  #ai-panel.visible { display: flex; }
+  #ai-messages { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+  #ai-messages::-webkit-scrollbar { width: 4px; }
+  #ai-messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+  .ai-msg { display: flex; gap: 12px; max-width: 860px; }
+  .ai-msg.user { flex-direction: row-reverse; align-self: flex-end; }
+  .ai-msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; background: #1e293b; }
+  .ai-msg.assistant .ai-msg-avatar { background: #4c1d95; }
+  .ai-msg-body { display: flex; flex-direction: column; gap: 4px; }
+  .ai-msg-bubble { padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.7; max-width: 680px; }
+  .ai-msg.user .ai-msg-bubble { background: #3730a3; color: #e0e7ff; border-bottom-right-radius: 4px; }
+  .ai-msg.assistant .ai-msg-bubble { background: #1e293b; color: #e2e8f0; border-bottom-left-radius: 4px; }
+  .ai-msg-bubble p { margin: 0 0 8px; } .ai-msg-bubble p:last-child { margin: 0; }
+  .ai-msg-bubble strong { color: #f1f5f9; }
+  .ai-msg-bubble code { background: #0f172a; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: #a78bfa; }
+  .ai-msg-bubble ul, .ai-msg-bubble ol { padding-left: 18px; margin: 6px 0; }
+  .ai-msg-bubble li { margin-bottom: 4px; }
+  .ai-sources { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .ai-source-chip { font-size: 10px; padding: 2px 8px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 12px; }
+  #ai-welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 12px; color: #475569; }
+  #ai-welcome .wi { font-size: 36px; }
+  #ai-welcome h3 { font-size: 16px; font-weight: 700; color: #94a3b8; }
+  #ai-welcome p  { font-size: 13px; color: #64748b; text-align: center; max-width: 380px; line-height: 1.6; }
+  #ai-input-area { padding: 16px 32px 20px; background: #0f172a; border-top: 1px solid #1e293b; }
+  #ai-input-row { display: flex; gap: 8px; align-items: flex-end; }
+  #ai-textarea {
+    flex: 1; background: #1e293b; color: #e2e8f0;
+    border: 1px solid #334155; border-radius: 10px;
+    padding: 10px 14px; font-size: 13px; resize: none; outline: none;
+    font-family: inherit; line-height: 1.5; min-height: 42px; max-height: 120px;
+  }
+  #ai-textarea:focus { border-color: #7c3aed; }
+  #ai-textarea::placeholder { color: #475569; }
+  #ai-send-btn { width: 38px; height: 38px; flex-shrink: 0; background: #7c3aed; color: #fff; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  #ai-send-btn:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
+  #ai-send-btn:hover:not(:disabled) { background: #6d28d9; }
+  .ai-thinking { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+  .ai-dot { width: 6px; height: 6px; border-radius: 50%; background: #7c3aed; opacity: 0.4; animation: pulse 1.2s ease-in-out infinite; }
+  .ai-dot:nth-child(2) { animation-delay: 0.2s; }
+  .ai-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,100% { opacity:0.4; transform:scale(1); } 50% { opacity:1; transform:scale(1.2); } }
+
   @media (max-width: 640px) { #sidebar { width: 220px; } #content { padding: 24px 20px; } }
 </style>
 </head>
@@ -199,6 +270,16 @@
   </div>
 </div>
 
+<div id="claude-overlay">
+  <div id="claude-box">
+    <h2>🤖 AI 리서치 설정</h2>
+    <p>회의록·기획 문서 AI 질의에 Claude API 키가 필요합니다.<br>키는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.</p>
+    <input id="claude-key-input" type="password" placeholder="sk-ant-api03-..." />
+    <div id="claude-err">sk-ant- 로 시작하는 키를 입력하세요.</div>
+    <button id="claude-save-btn" onclick="saveClaudeKey()">저장하고 시작하기</button>
+  </div>
+</div>
+
 <div id="sidebar">
   <div id="sidebar-header">
     <div>
@@ -215,6 +296,7 @@
     <div class="tab"        data-tab="irdeck"     onclick="switchTab('irdeck')">IR Deck</div>
     <div class="tab"        data-tab="automation" onclick="switchTab('automation')">자동 프로세스</div>
     <div class="tab"        data-tab="techtalk"   onclick="switchTab('techtalk')">Tech Talk</div>
+    <div class="tab ai-tab" data-tab="ai"         onclick="switchTab('ai')">✦ AI 리서치</div>
   </div>
 
   <div id="search-wrap">
@@ -227,6 +309,22 @@
 
   <div id="file-list">
     <div class="loading"><div class="spinner"></div> 불러오는 중...</div>
+  </div>
+
+  <div id="ai-sidebar-content">
+    <div class="ai-quick-label">빠른 질문</div>
+    <button class="ai-quick-btn" onclick="askQuick('최근 회의에서 결정된 주요 기획 변경사항은?')">📋 최근 주요 기획 결정사항</button>
+    <button class="ai-quick-btn" onclick="askQuick('성과평가 사이클과 관련된 회의 결정사항을 정리해줘')">📊 성과평가 관련 결정사항</button>
+    <button class="ai-quick-btn" onclick="askQuick('OKR 기능 관련 회의에서 논의된 내용은?')">🎯 OKR 논의 내용</button>
+    <button class="ai-quick-btn" onclick="askQuick('1on1 미팅 관련 기획에서 변경된 내용은?')">💬 1on1 기획 변경사항</button>
+    <button class="ai-quick-btn" onclick="askQuick('AI 기능과 관련해 결정된 사항을 요약해줘')">🤖 AI 기능 결정사항</button>
+    <button class="ai-quick-btn" onclick="askQuick('아직 미결된 논의 사항이나 액션 아이템은?')">⏳ 미결 사항 / 액션 아이템</button>
+    <div class="ai-claude-key">
+      <div class="ai-key-status">
+        <span id="ai-key-status-text" style="color:var(--muted)">Claude 키 미설정</span>
+        <button class="ai-key-reset" onclick="showClaudeKeyOverlay()">키 변경</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -243,10 +341,30 @@
     <div id="md-body" style="display:none"></div>
     <iframe id="html-frame"></iframe>
   </div>
+
+  <div id="ai-panel">
+    <div id="ai-messages">
+      <div id="ai-welcome">
+        <div class="wi">✦</div>
+        <h3>PIVIT AI 리서치</h3>
+        <p>회의록, 기획 결정사항, 스펙 문서를 기반으로 질문에 답합니다.<br>왼쪽 빠른 질문 또는 아래에서 직접 입력하세요.</p>
+      </div>
+    </div>
+    <div id="ai-input-area">
+      <div id="ai-input-row">
+        <textarea id="ai-textarea" placeholder="회의록이나 기획 결정사항에 대해 질문하세요..." rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg()}"
+          oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+        <button id="ai-send-btn" onclick="sendAiMsg()" disabled>↑</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
-const LS_KEY = "pivit_gh_token";
+const LS_KEY        = "pivit_gh_token";
+const LS_CLAUDE_KEY = "pivit_claude_key";
+const ALLOWED_EXT   = [".md", ".html", ".jsx"];
 
 const TAB_SOURCES = {
   minutes:    [{ repo: "pivit-work/team-wiki", folder: "회의록" }],
@@ -259,32 +377,27 @@ const TAB_SOURCES = {
   ],
   techtalk:   [{ repo: "pivit-work/team-wiki",             folder: "tech-talk" }],
 };
-
 const AUTOMATION_ROOT_FILES = ["automation-alerts.md"];
 const AUTOMATION_EXCLUDE    = ["meeting-transcript-2026-03-26.md"];
-const ALLOWED_EXT = [".md", ".html", ".jsx"];
 
-let folderCache    = {};
-let contentCache   = {};  // path → text (회의록 전체검색용)
-let currentTab     = "minutes";
-let activeItem     = null;
-let ghToken        = "";
-let searchResults  = null; // null = 파일명 모드, array = 전체검색 결과 모드
+let folderCache  = {};
+let contentCache = {};
+let currentTab   = "minutes";
+let activeItem   = null;
+let ghToken      = "";
+let searchResults = null;
+let aiDocCache   = [];
+let aiLoading    = false;
 
+// ── GitHub 토큰
 function getToken() { return localStorage.getItem(LS_KEY) || ""; }
-
 function saveToken() {
   const val = document.getElementById("token-input").value.trim();
-  if (!val.startsWith("ghp_") && !val.startsWith("github_pat_")) {
-    document.getElementById("token-err").style.display = "block";
-    return;
-  }
-  localStorage.setItem(LS_KEY, val);
-  ghToken = val;
+  if (!val.startsWith("ghp_") && !val.startsWith("github_pat_")) { document.getElementById("token-err").style.display = "block"; return; }
+  localStorage.setItem(LS_KEY, val); ghToken = val;
   document.getElementById("token-overlay").style.display = "none";
   loadFileList();
 }
-
 function resetToken() {
   localStorage.removeItem(LS_KEY);
   document.getElementById("token-input").value = "";
@@ -292,342 +405,355 @@ function resetToken() {
   document.getElementById("token-overlay").style.display = "flex";
 }
 
+// ── Claude API 키
+function getClaudeKey() { return localStorage.getItem(LS_CLAUDE_KEY) || ""; }
+function saveClaudeKey() {
+  const k = document.getElementById("claude-key-input").value.trim();
+  if (!k.startsWith("sk-ant-")) { document.getElementById("claude-err").style.display = "block"; return; }
+  localStorage.setItem(LS_CLAUDE_KEY, k);
+  document.getElementById("claude-overlay").style.display = "none";
+  updateKeyStatus();
+}
+function showClaudeKeyOverlay() { document.getElementById("claude-overlay").style.display = "flex"; }
+function updateKeyStatus() {
+  const k = getClaudeKey();
+  const el = document.getElementById("ai-key-status-text");
+  if (k) { el.style.color="#4ade80"; el.textContent="✓ Claude 키 설정됨"; document.getElementById("ai-send-btn").disabled=false; }
+  else   { el.style.color="var(--muted)"; el.textContent="Claude 키 미설정"; document.getElementById("ai-send-btn").disabled=true; }
+}
+
+// ── GitHub API
 async function ghGet(repo, path) {
   const encodedPath = path ? path.split('/').map(s => encodeURIComponent(s)).join('/') : '';
-  const url = `https://api.github.com/repos/${repo}/contents/${encodedPath}`;
-  const r = await fetch(url, {
+  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, {
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" },
   });
   if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
-
 async function fetchText(repo, path) {
   const data  = await ghGet(repo, path);
-  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g,"")), c=>c.charCodeAt(0));
   return new TextDecoder("utf-8").decode(bytes);
 }
-
-async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth = 3, depth = 0) {
+async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth=3, depth=0) {
   const items = await ghGet(repo, dirPath);
   if (!Array.isArray(items)) return [];
   const results = [];
   for (const item of items) {
     const ext = "." + item.name.split('.').pop();
-    if (item.type === 'file' && ALLOWED_EXT.includes(ext)) {
-      const relPath = baseFolder ? item.path.slice(baseFolder.length + 1) : item.path;
-      const parts   = relPath.split('/');
-      item._subdir  = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+    if (item.type==='file' && ALLOWED_EXT.includes(ext)) {
+      const relPath = baseFolder ? item.path.slice(baseFolder.length+1) : item.path;
+      const parts = relPath.split('/');
+      item._subdir = parts.length>1 ? parts.slice(0,-1).join('/') : '';
       results.push(item);
-    } else if (item.type === 'dir' && depth < maxDepth) {
-      const sub = await fetchFilesRecursive(repo, item.path, baseFolder, maxDepth, depth + 1);
-      results.push(...sub);
+    } else if (item.type==='dir' && depth<maxDepth) {
+      results.push(...await fetchFilesRecursive(repo, item.path, baseFolder, maxDepth, depth+1));
     }
   }
   return results;
 }
 
-function parseDate(name) {
-  const m = name.match(/(\d{8})/);
-  return m ? m[1] : "00000000";
-}
-
-function categorize(name) {
-  if (/^pivit_feature_/.test(name) || /earnest/i.test(name)) return "planning";
-  return "minutes";
-}
-
+function parseDate(name) { const m = name.match(/(\d{8})/); return m ? m[1] : "00000000"; }
+function categorize(name) { return (/^pivit_feature_/.test(name)||/earnest/i.test(name)) ? "planning" : "minutes"; }
 const AUTO_LABELS = {
   "implementation-status":             "구현 현황",
   "meeting-notes-automation-pipeline": "회의록 자동화 파이프라인 설계",
   "project-handoff":                   "프로젝트 핸드오프",
   "automation-alerts":                 "자동화 & 얼럿 전체 목록",
 };
-
-function autoLabel(name) {
-  const key = name.replace(/\.(md|html|jsx)$/, "");
-  return AUTO_LABELS[key] || key;
-}
-
+function autoLabel(name) { return AUTO_LABELS[name.replace(/\.(md|html|jsx)$/,"")] || name.replace(/\.(md|html|jsx)$/,""); }
 function fileLabel(f, folder) {
-  if (folder === "docs" || folder === "" || folder === "tech-talk")
-    return autoLabel(f.name);
-  return f.name.replace(/\.(md|html|jsx)$/, "");
+  return (folder==="docs"||folder===""||folder==="tech-talk") ? autoLabel(f.name) : f.name.replace(/\.(md|html|jsx)$/,"");
 }
 
+// ── 파일 목록 로드
 async function loadFileList() {
-  const sources  = TAB_SOURCES[currentTab];
-  const cacheKey = currentTab;
-  if (folderCache[cacheKey]) { renderList(); return; }
-
-  document.getElementById("file-list").innerHTML =
-    `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
-
+  if (currentTab==="ai") return;
+  if (folderCache[currentTab]) { renderList(); return; }
+  document.getElementById("file-list").innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
   try {
     const allMapped = [];
-    for (const { repo, folder } of sources) {
-      const isAutoRepo   = repo.includes("meeting-automation");
-      const isRootFolder = folder === "";
-
-      const rawFiles = isRootFolder
-        ? await ghGet(repo, folder)
-        : await fetchFilesRecursive(repo, folder, folder);
-
+    for (const { repo, folder } of TAB_SOURCES[currentTab]) {
+      const isAutoRepo=repo.includes("meeting-automation"), isRootFolder=folder==="";
+      const rawFiles = isRootFolder ? await ghGet(repo, folder) : await fetchFilesRecursive(repo, folder, folder);
       const filtered = rawFiles.filter(f => {
-        const ext = "." + f.name.split('.').pop();
+        const ext = "."+f.name.split('.').pop();
         if (!ALLOWED_EXT.includes(ext)) return false;
         if (AUTOMATION_EXCLUDE.includes(f.name)) return false;
         if (isRootFolder) return AUTOMATION_ROOT_FILES.includes(f.name);
         return true;
       });
-
-      const mapped = filtered.map(f => ({
-        name:     f.name,
-        path:     f.path,
-        repo:     repo,
-        htmlUrl:  f.html_url,
-        date:     parseDate(f.name),
-        subdir:   f._subdir || '',
-        category: (() => {
-          if (folder === "아키텍처")  return "arch";
-          if (folder === "ir-deck")  return "irdeck";
-          if (folder === "tech-talk") return "techtalk";
-          if (folder === "기획내용")  return "planning";
-          if (folder === "docs" || isRootFolder || isAutoRepo) return "automation";
+      allMapped.push(...filtered.map(f => ({
+        name:f.name, path:f.path, repo, htmlUrl:f.html_url,
+        date:parseDate(f.name), subdir:f._subdir||'',
+        category:(()=>{
+          if (folder==="아키텍처")  return "arch";
+          if (folder==="ir-deck")  return "irdeck";
+          if (folder==="tech-talk") return "techtalk";
+          if (folder==="기획내용")  return "planning";
+          if (folder==="docs"||isRootFolder||isAutoRepo) return "automation";
           return categorize(f.name);
         })(),
-        label:  fileLabel(f, folder),
-        isHtml: f.name.endsWith('.html'),
-        isJsx:  f.name.endsWith('.jsx'),
-      }));
-      allMapped.push(...mapped);
+        label:fileLabel(f,folder), isHtml:f.name.endsWith('.html'), isJsx:f.name.endsWith('.jsx'),
+      })));
     }
-
-    allMapped.sort((a, b) => b.date.localeCompare(a.date));
-    folderCache[cacheKey] = allMapped;
+    allMapped.sort((a,b)=>b.date.localeCompare(a.date));
+    folderCache[currentTab] = allMapped;
     renderList();
-  } catch (e) {
-    document.getElementById("file-list").innerHTML =
-      `<div style="padding:16px;font-size:12px;color:#ef4444">불러오기 실패: ${e.message}</div>`;
+  } catch(e) {
+    document.getElementById("file-list").innerHTML = `<div style="padding:16px;font-size:12px;color:#ef4444">불러오기 실패: ${e.message}</div>`;
   }
 }
 
-// ── 전체 내용 검색 (회의록 탭)
+// ── 전체 내용 검색
 async function searchContent() {
   const q = document.getElementById("search").value.trim();
-  if (!q) { searchResults = null; renderList(); return; }
-
+  if (!q) { searchResults=null; renderList(); return; }
   const status = document.getElementById("search-status");
-  status.style.display = "block";
-  status.textContent = "전체 검색 중...";
-
-  const cached = folderCache[currentTab] || [];
-  const minutes = cached.filter(f => f.category === currentTab);
-
+  status.style.display="block"; status.textContent="전체 검색 중...";
+  const minutes = (folderCache[currentTab]||[]).filter(f=>f.category===currentTab);
   const results = [];
-  let done = 0;
+  let done=0;
   for (const f of minutes) {
     try {
       let text = contentCache[f.path];
-      if (!text) {
-        text = await fetchText(f.repo, f.path);
-        contentCache[f.path] = text;
+      if (!text) { text=await fetchText(f.repo,f.path); contentCache[f.path]=text; }
+      const idx = text.toLowerCase().indexOf(q.toLowerCase());
+      if (idx!==-1) {
+        const snip = text.slice(Math.max(0,idx-60),idx+120).replace(/\n/g," ").replace(/#+\s*/g,"").trim();
+        const hi = snip.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`);
+        results.push({...f, snippet:hi});
       }
-      const lower = text.toLowerCase();
-      const qLow  = q.toLowerCase();
-      const idx   = lower.indexOf(qLow);
-      if (idx !== -1) {
-        const snip = text.slice(Math.max(0, idx - 60), idx + 120)
-          .replace(/\n/g, " ").replace(/#+\s*/g, "").trim();
-        const highlighted = snip.replace(
-          new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
-          m => `<mark>${m}</mark>`
-        );
-        results.push({ ...f, snippet: highlighted });
-      }
-    } catch (_) {}
-    done++;
-    status.textContent = `전체 검색 중... (${done}/${minutes.length})`;
+    } catch(_){}
+    done++; status.textContent=`전체 검색 중... (${done}/${minutes.length})`;
   }
-
-  searchResults = results;
-  status.textContent = `"${q}" 검색 결과: ${results.length}개 파일`;
+  searchResults=results; status.textContent=`"${q}" 검색 결과: ${results.length}개 파일`;
   renderList();
 }
-
 function onSearchInput() {
-  if (searchResults !== null) {
-    // 전체검색 모드 해제
-    searchResults = null;
-    document.getElementById("search-status").style.display = "none";
-  }
+  if (searchResults!==null) { searchResults=null; document.getElementById("search-status").style.display="none"; }
   renderList();
 }
 
-function fmtDate(d) {
-  if (!d || d === "00000000") return "";
-  return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`;
-}
+function fmtDate(d) { if(!d||d==="00000000") return ""; return `${d.slice(0,4)}.${d.slice(4,6)}.${d.slice(6,8)}`; }
 
 function renderList() {
-  const q      = document.getElementById("search").value.toLowerCase();
-  const list   = document.getElementById("file-list");
-  const cached = folderCache[currentTab] || [];
+  const q    = document.getElementById("search").value.toLowerCase();
+  const list = document.getElementById("file-list");
 
-  // 전체검색 결과 모드
-  if (searchResults !== null) {
-    if (searchResults.length === 0) {
-      list.innerHTML = `<div style="padding:20px 16px;font-size:12px;color:#9ca3af;text-align:center">검색 결과 없음</div>`;
-      return;
-    }
-    let html = '';
-    for (const f of searchResults) {
-      const isActive = activeItem === f.path;
-      const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-      const escR = f.repo.replace(/'/g, "\\'");
-      html += `
-        <div class="file-item ${isActive ? "active" : ""}"
-             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
-          <div class="fname">${f.label}</div>
-          <div class="fdate">${fmtDate(f.date)}</div>
-          <div class="fsnip">${f.snippet}</div>
-        </div>`;
-    }
-    list.innerHTML = html;
-    return;
+  if (searchResults!==null) {
+    if (!searchResults.length) { list.innerHTML=`<div style="padding:20px 16px;font-size:12px;color:#9ca3af;text-align:center">검색 결과 없음</div>`; return; }
+    list.innerHTML = searchResults.map(f=>{
+      const esc=f.label.replace(/'/g,"\\'").replace(/"/g,"&quot;"), escR=f.repo.replace(/'/g,"\\'");
+      return `<div class="file-item ${activeItem===f.path?'active':''}" onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}')">
+        <div class="fname">${f.label}</div><div class="fdate">${fmtDate(f.date)}</div><div class="fsnip">${f.snippet}</div></div>`;
+    }).join(''); return;
   }
 
-  // 파일명 검색 모드
-  const items = cached.filter(f =>
-    f.category === currentTab &&
-    (q === "" || f.label.toLowerCase().includes(q) || f.subdir.toLowerCase().includes(q))
+  const items=(folderCache[currentTab]||[]).filter(f=>
+    f.category===currentTab&&(q===""||f.label.toLowerCase().includes(q)||f.subdir.toLowerCase().includes(q))
   );
+  if (!items.length) { list.innerHTML=`<div style="padding:20px 16px;font-size:12px;color:#9ca3af;text-align:center">문서가 없습니다</div>`; return; }
 
-  if (items.length === 0) {
-    list.innerHTML = `<div style="padding:20px 16px;font-size:12px;color:#9ca3af;text-align:center">문서가 없습니다</div>`;
-    return;
-  }
+  const groups=new Map();
+  for (const f of items) { const k=f.subdir||''; if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(f); }
+  const sortedKeys=[...groups.keys()].sort((a,b)=>{if(a===''&&b!=='')return -1;if(a!==''&&b==='')return 1;return a.localeCompare(b,'ko');});
 
-  const groups = new Map();
-  for (const f of items) {
-    const key = f.subdir || '';
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(f);
-  }
-
-  const sortedKeys = [...groups.keys()].sort((a, b) => {
-    if (a === '' && b !== '') return -1;
-    if (a !== '' && b === '') return 1;
-    return a.localeCompare(b, 'ko');
-  });
-
-  let html = '';
+  let html='';
   for (const key of sortedKeys) {
-    const groupItems = groups.get(key);
-    groupItems.sort((a, b) => b.date.localeCompare(a.date));
-    if (key) html += `<div class="dir-header">📁 ${key}</div>`;
-    for (const f of groupItems) {
-      const isActive = activeItem === f.path;
-      const esc  = f.label.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-      const escR = f.repo.replace(/'/g, "\\'");
-      let badge = "";
-      if (currentTab === "irdeck")     badge = `<span class="badge badge-ir">IR</span>`;
-      if (currentTab === "automation") badge = `<span class="badge badge-auto">AUTO</span>`;
-      if (currentTab === "techtalk")   badge = f.isHtml ? `<span class="badge badge-tt">SLIDES</span>` : `<span class="badge badge-tt">TT</span>`;
-      if (currentTab === "arch")       badge = f.isJsx ? `<span class="badge badge-arch">JSX</span>` : (f.isHtml ? `<span class="badge badge-arch">HTML</span>` : `<span class="badge badge-arch">ARCH</span>`);
-      if (f.name.includes("backlog"))  badge = `<span class="badge badge-back">BACKLOG</span>`;
-      html += `
-        <div class="file-item ${isActive ? "active" : ""} ${key ? "nested" : ""}"
-             onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}','${f.isJsx||false}')">
-          <div class="fname">${f.label} ${badge}</div>
-          <div class="fdate">${fmtDate(f.date)}</div>
-        </div>`;
+    const gItems=groups.get(key); gItems.sort((a,b)=>b.date.localeCompare(a.date));
+    if (key) html+=`<div class="dir-header">📁 ${key}</div>`;
+    for (const f of gItems) {
+      const esc=f.label.replace(/'/g,"\\'").replace(/"/g,"&quot;"), escR=f.repo.replace(/'/g,"\\'");
+      let badge="";
+      if (currentTab==="irdeck")     badge=`<span class="badge badge-ir">IR</span>`;
+      if (currentTab==="automation") badge=`<span class="badge badge-auto">AUTO</span>`;
+      if (currentTab==="techtalk")   badge=f.isHtml?`<span class="badge badge-tt">SLIDES</span>`:`<span class="badge badge-tt">TT</span>`;
+      if (currentTab==="arch")       badge=f.isJsx?`<span class="badge badge-arch">JSX</span>`:(f.isHtml?`<span class="badge badge-arch">HTML</span>`:`<span class="badge badge-arch">ARCH</span>`);
+      if (f.name.includes("backlog")) badge=`<span class="badge badge-back">BACKLOG</span>`;
+      html+=`<div class="file-item ${activeItem===f.path?'active':''} ${key?'nested':''}" onclick="openFile('${f.path}','${esc}','${f.htmlUrl}','${escR}','${f.isHtml||false}','${f.isJsx||false}')">
+        <div class="fname">${f.label} ${badge}</div><div class="fdate">${fmtDate(f.date)}</div></div>`;
     }
   }
-  list.innerHTML = html;
+  list.innerHTML=html;
 }
 
+// ── 파일 열기
 async function openFile(path, label, htmlUrl, repo, isHtml, isJsx) {
-  activeItem = path;
-  renderList();
+  activeItem=path; renderList();
+  document.getElementById("doc-title").textContent=label;
+  const lnk=document.getElementById("gh-link"); lnk.href=htmlUrl; lnk.style.display="inline-block";
+  const mdBody=document.getElementById("md-body"), frame=document.getElementById("html-frame"),
+        empty=document.getElementById("empty-state"), content=document.getElementById("content");
+  empty.style.display="none";
 
-  document.getElementById("doc-title").textContent = label;
-  const lnk = document.getElementById("gh-link");
-  lnk.href = htmlUrl; lnk.style.display = "inline-block";
-
-  const mdBody  = document.getElementById("md-body");
-  const frame   = document.getElementById("html-frame");
-  const empty   = document.getElementById("empty-state");
-  const content = document.getElementById("content");
-  empty.style.display = "none";
-
-  if (isHtml === "true") {
-    mdBody.style.display = "block";
-    mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
-    frame.style.display = "none"; frame.srcdoc = "";
+  if (isHtml==="true") {
+    mdBody.style.display="block"; mdBody.innerHTML=`<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+    frame.style.display="none"; frame.srcdoc="";
     try {
-      const data      = await ghGet(repo, path);
-      const bytes     = Uint8Array.from(atob(data.content.replace(/\n/g,"")), c=>c.charCodeAt(0));
-      const htmlContent = new TextDecoder("utf-8").decode(bytes);
-      mdBody.style.display = "none";
-      frame.srcdoc = htmlContent; frame.style.display = "block";
-      content.style.padding = "0"; content.style.overflow = "hidden";
-    } catch (e) {
-      mdBody.style.display = "block";
-      mdBody.innerHTML = `<p style="color:#ef4444">로드 실패: ${e.message}</p>`;
-    }
+      const data=await ghGet(repo,path);
+      const bytes=Uint8Array.from(atob(data.content.replace(/\n/g,"")),c=>c.charCodeAt(0));
+      mdBody.style.display="none"; frame.srcdoc=new TextDecoder("utf-8").decode(bytes);
+      frame.style.display="block"; content.style.padding="0"; content.style.overflow="hidden";
+    } catch(e) { mdBody.style.display="block"; mdBody.innerHTML=`<p style="color:#ef4444">로드 실패: ${e.message}</p>`; }
   } else {
-    frame.style.display = "none"; frame.srcdoc = "";
-    content.style.padding = ""; content.style.overflow = "";
-    mdBody.style.display = "block";
-    mdBody.innerHTML = `<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
+    frame.style.display="none"; frame.srcdoc=""; content.style.padding=""; content.style.overflow="";
+    mdBody.style.display="block"; mdBody.innerHTML=`<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
     try {
-      const text = contentCache[path] || await fetchText(repo, path);
-      contentCache[path] = text;
-      if (isJsx === "true") {
-        // JSX → 코드 블록으로 렌더링
-        const escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        mdBody.innerHTML = `<pre><code>${escaped}</code></pre>`;
-      } else {
-        mdBody.innerHTML = marked.parse(text);
-      }
-      content.scrollTop = 0;
-    } catch (e) {
-      mdBody.innerHTML = `<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`;
-    }
+      const text=contentCache[path]||await fetchText(repo,path); contentCache[path]=text;
+      if (isJsx==="true") {
+        const esc=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        mdBody.innerHTML=`<pre><code>${esc}</code></pre>`;
+      } else { mdBody.innerHTML=marked.parse(text); }
+      content.scrollTop=0;
+    } catch(e) { mdBody.innerHTML=`<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`; }
   }
 }
 
+// ── 탭 전환
 function switchTab(tab) {
-  currentTab = tab;
-  searchResults = null;
-  document.getElementById("search-status").style.display = "none";
-  document.getElementById("search").value = "";
-  document.querySelectorAll(".tab").forEach(el => el.classList.toggle("active", el.dataset.tab === tab));
-  // 아키텍처 탭에서는 전체검색 버튼 숨김
-  document.getElementById("content-search-btn").style.display =
-    (tab === "minutes") ? "inline-block" : "none";
-  activeItem = null;
-  document.getElementById("doc-title").textContent = "파일을 선택하세요";
-  document.getElementById("gh-link").style.display = "none";
-  document.getElementById("md-body").style.display = "none";
-  const fr = document.getElementById("html-frame"); fr.style.display="none"; fr.srcdoc="";
-  document.getElementById("content").style.padding = "";
-  document.getElementById("content").style.overflow = "";
-  document.getElementById("empty-state").style.display = "flex";
-  loadFileList();
+  currentTab=tab; searchResults=null;
+  document.getElementById("search-status").style.display="none";
+  document.getElementById("search").value="";
+  document.querySelectorAll(".tab").forEach(el=>el.classList.toggle("active",el.dataset.tab===tab));
+  const isAi=tab==="ai";
+  document.getElementById("search-wrap").style.display        = isAi?"none":"";
+  document.getElementById("file-list").style.display          = isAi?"none":"";
+  document.getElementById("ai-sidebar-content").classList.toggle("visible",isAi);
+  document.getElementById("content").style.display            = isAi?"none":"";
+  document.getElementById("toolbar").style.display            = isAi?"none":"";
+  document.getElementById("ai-panel").classList.toggle("visible",isAi);
+  document.getElementById("content-search-btn").style.display = (!isAi&&tab==="minutes")?"inline-block":"none";
+  if (!isAi) {
+    activeItem=null;
+    document.getElementById("doc-title").textContent="파일을 선택하세요";
+    document.getElementById("gh-link").style.display="none";
+    document.getElementById("md-body").style.display="none";
+    const fr=document.getElementById("html-frame"); fr.style.display="none"; fr.srcdoc="";
+    document.getElementById("content").style.padding=""; document.getElementById("content").style.overflow="";
+    document.getElementById("empty-state").style.display="flex";
+    loadFileList();
+  } else { updateKeyStatus(); loadAiDocs(); }
 }
 
-ghToken = getToken();
-if (!ghToken) {
-  document.getElementById("token-overlay").style.display = "flex";
-  document.getElementById("file-list").innerHTML = "";
-} else {
-  // 초기 탭 세팅: 아키텍처 탭에서는 전체검색 버튼 숨김
-  document.getElementById("content-search-btn").style.display = "inline-block";
-  loadFileList();
+// ── AI 문서 로드
+async function loadAiDocs() {
+  if (aiDocCache.length>0||aiLoading) return;
+  aiLoading=true;
+  const statusEl=document.getElementById("ai-key-status-text");
+  statusEl.textContent="문서 로딩 중..."; statusEl.style.color="#94a3b8";
+  try {
+    let id=0;
+    for (const { folder, cacheKey, type } of [
+      {folder:"회의록",  cacheKey:"minutes",  type:"회의록"},
+      {folder:"기획내용", cacheKey:"planning", type:"기획결정"},
+    ]) {
+      let files=folderCache[cacheKey];
+      if (!files) {
+        const rawFiles=await fetchFilesRecursive("pivit-work/team-wiki",folder,folder);
+        files=rawFiles.filter(f=>f.name.endsWith(".md")).map(f=>({
+          name:f.name, path:f.path, repo:"pivit-work/team-wiki",
+          date:parseDate(f.name), label:f.name.replace(/\.md$/,""),
+          subdir:f._subdir||'', category:cacheKey==="minutes"?categorize(f.name):"planning",
+        }));
+        folderCache[cacheKey]=files;
+      }
+      for (const f of files.filter(f=>f.name.endsWith(".md"))) {
+        try {
+          const text=contentCache[f.path]||await fetchText(f.repo,f.path);
+          contentCache[f.path]=text;
+          aiDocCache.push({id:id++,type,label:f.label,path:f.path,repo:f.repo,date:f.date,content:text});
+        } catch(_){}
+      }
+    }
+    updateKeyStatus();
+    const el=document.getElementById("ai-key-status-text");
+    if (el.textContent.includes("설정됨")) el.textContent+=` (${aiDocCache.length}개 문서)`;
+  } catch(e) { statusEl.textContent="문서 로드 실패"; statusEl.style.color="#ef4444"; }
+  aiLoading=false;
 }
+
+// ── 키워드 검색
+function scoreDoc(doc, query) {
+  const words=query.toLowerCase().split(/\s+/).filter(w=>w.length>1);
+  const text=(doc.label+" "+doc.content).toLowerCase();
+  let score=0;
+  for (const w of words) { const ms=text.match(new RegExp(w,"g")); if(ms) score+=ms.length; if(doc.label.toLowerCase().includes(w)) score+=5; }
+  const ageDays=(20260427-parseInt(doc.date||"20200101"))/10000*365;
+  score+=Math.max(0,30-ageDays*0.1);
+  return score;
+}
+function getTopDocs(query,n=6) {
+  return aiDocCache.map(d=>({...d,score:scoreDoc(d,query)})).filter(d=>d.score>0).sort((a,b)=>b.score-a.score).slice(0,n);
+}
+
+// ── AI 메시지
+function appendMsg(role,html) {
+  const welcome=document.getElementById("ai-welcome"); if(welcome) welcome.remove();
+  const msgs=document.getElementById("ai-messages");
+  const div=document.createElement("div"); div.className=`ai-msg ${role}`;
+  div.innerHTML=`<div class="ai-msg-avatar">${role==="user"?"👤":"✦"}</div><div class="ai-msg-body"><div class="ai-msg-bubble">${html}</div></div>`;
+  msgs.appendChild(div); msgs.scrollTop=msgs.scrollHeight;
+  return div.querySelector(".ai-msg-bubble");
+}
+function mdToHtml(text) {
+  return text.replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\[(\d+)\]/g,"<span style='color:#a78bfa'>[$1]</span>")
+    .replace(/\n\n/g,"</p><p>").replace(/\n/g,"<br>").replace(/^/,"<p>").replace(/$/,"</p>");
+}
+
+async function sendAiMsg(overrideQuery) {
+  const textarea=document.getElementById("ai-textarea");
+  const query=overrideQuery||textarea.value.trim(); if(!query) return;
+  const claudeKey=getClaudeKey(); if(!claudeKey) { showClaudeKeyOverlay(); return; }
+  textarea.value=""; textarea.style.height="auto";
+  appendMsg("user",query);
+  const topDocs=getTopDocs(query);
+  const thinkBubble=appendMsg("assistant",`<div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>`);
+
+  const contextText=topDocs.length
+    ? topDocs.map((d,i)=>`[문서 ${i+1}] ${d.label} (${d.type}, ${fmtDate(d.date)})\n${d.content.slice(0,3000)}`).join("\n\n---\n\n")
+    : "관련 문서를 찾지 못했습니다.";
+
+  try {
+    const res=await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":claudeKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({
+        model:"claude-haiku-4-5-20251001", max_tokens:1500, stream:true,
+        system:`당신은 PIVIT 스타트업의 기획·회의 내용을 분석하는 AI 어시스턴트입니다.\n아래 문서들을 참고해서 질문에 답하세요. 답변 시 [문서 N] 형태로 출처를 인용하세요.\n답변은 한국어로, 간결하고 구체적으로 작성하세요.\n\n=== 참고 문서 ===\n${contextText}`,
+        messages:[{role:"user",content:query}],
+      }),
+    });
+    if (!res.ok) { const err=await res.json(); thinkBubble.innerHTML=`<span style="color:#f87171">오류: ${err.error?.message||res.status}</span>`; return; }
+
+    let fullText="";
+    const reader=res.body.getReader(); const decoder=new TextDecoder();
+    thinkBubble.innerHTML="";
+    while(true) {
+      const {done,value}=await reader.read(); if(done) break;
+      for (const line of decoder.decode(value).split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const data=line.slice(6).trim(); if(data==="[DONE]") break;
+        try { const evt=JSON.parse(data); if(evt.type==="content_block_delta"&&evt.delta?.type==="text_delta") { fullText+=evt.delta.text; thinkBubble.innerHTML=mdToHtml(fullText); document.getElementById("ai-messages").scrollTop=99999; } } catch(_){}
+      }
+    }
+    if (topDocs.length) {
+      const chips=document.createElement("div"); chips.className="ai-sources";
+      chips.innerHTML=topDocs.map((d,i)=>`<span class="ai-source-chip">[${i+1}] ${d.label}</span>`).join("");
+      thinkBubble.parentElement.appendChild(chips);
+    }
+  } catch(e) { thinkBubble.innerHTML=`<span style="color:#f87171">연결 오류: ${e.message}</span>`; }
+}
+function askQuick(q) { document.getElementById("ai-textarea").value=q; sendAiMsg(); }
+
+// ── 시작
+ghToken=getToken();
+if (!ghToken) { document.getElementById("token-overlay").style.display="flex"; document.getElementById("file-list").innerHTML=""; }
+else { document.getElementById("content-search-btn").style.display="inline-block"; loadFileList(); }
+updateKeyStatus();
 </script>
 
 </body>
