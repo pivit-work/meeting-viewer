@@ -462,7 +462,9 @@ function buildIframeHTML(code) {
   const compName = match ? match[1] : null;
 
   const processed = code
-    .replace(/^import\b[\s\S]*?from\s+['"][^'"]+['"]\s*;?\s*$/gm, "")
+    // import 문은 줄 단위로 모두 제거 (side-effect import 포함: import 'x', import './x.css')
+    // — babel(classic script)에 import가 남으면 "Cannot use import statement outside a module" 발생
+    .replace(/^[ \t]*import\s[^\n]*$/gm, "")
     .replace(/\bexport\s+default\s+(function|class)\b/g, "$1")
     .replace(/\bexport\s+(function|class|const|let|var)\b/g, "$1")
     .replace(/\bexport\s*\{[^}]*\}\s*;?/g, "");
