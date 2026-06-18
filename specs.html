@@ -470,7 +470,7 @@ function buildIframeHTML(code) {
   const needsRecharts = /from\s+['"]recharts['"]/i.test(code);
 
   const rechartsScript = needsRecharts
-    ? '<script src="https://unpkg.com/recharts/umd/Recharts.js"><\/script>' : "";
+    ? '<script crossorigin src="https://unpkg.com/recharts@2/umd/Recharts.js"><\/script>' : "";
   const rechartsSetup = needsRecharts
     ? `const { BarChart, Bar, LineChart, Line, AreaChart, Area,
         XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -510,27 +510,37 @@ try {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"><\/script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"><\/script>
+<script crossorigin src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"><\/script>
 ${rechartsScript}
 <style>
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
 </style>
 <script>
-window.onerror = function(msg, src, line, col, err) {
-  document.getElementById('root').innerHTML =
-    '<div style="margin:24px;padding:16px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;font-family:monospace;font-size:12px;color:#9A3412">' +
-    '<b>전역 오류 (' + (src||'').split('/').pop() + ':' + line + ')</b><br><br>' + msg +
-    '<br><br><pre style="font-size:10px;white-space:pre-wrap">' + (err&&err.stack||'') + '</pre></div>';
-  return true;
-};
+// 실제 에러를 화면에 노출 — cross-origin "Script error. Line: 0" 마스킹 방지
+(function(){
+  var shown = false;
+  function show(title, detail){
+    if (shown) return; shown = true;
+    var root = document.getElementById('root');
+    if (!root) return;
+    root.innerHTML = '<div style="margin:24px;padding:18px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#B91C1C;line-height:1.6;white-space:pre-wrap;word-break:break-word"><b style="font-size:13px">⚠ ' + title + '</b><br><br>' + (detail || '') + '</div>';
+  }
+  window.addEventListener('error', function(e){
+    if (e && e.error) { show('실행 오류', (e.error.message || '') + '\n\n' + (e.error.stack || '')); }
+    else { show('스크립트 로드 실패', (e && e.message ? e.message : 'Script error') + '\n출처: ' + ((e && e.filename) || 'unknown') + ':' + ((e && e.lineno) || 0) + '\n\nCDN(unpkg) 스크립트를 불러오지 못했을 수 있습니다. 인터넷 연결을 확인하세요.'); }
+  }, true);
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e && e.reason; show('비동기 오류', r ? (r.stack || r.message || String(r)) : 'unknown');
+  });
+})();
 <\/script>
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react,env">
 const {
   useState, useEffect, useRef, useCallback,
   useMemo, useReducer, useContext, createContext,
