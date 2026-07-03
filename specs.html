@@ -244,9 +244,15 @@ async function loadNewBadges() {
 }
 
 async function fetchText(path) {
-  // Contents API의 base64(content) 응답은 1MB 초과 파일에서 content가 빈 문자열로 와
-  // 코드가 사라지고 렌더가 실패한다. raw 미디어 타입으로 요청하면 크기 제한 없이(≤100MB)
-  // 원문 텍스트를 그대로 받아 대용량 통합 셸(eval-app 등)도 정상 렌더된다.
+  // 1MB 이하: 기존 검증된 base64(content) 경로 그대로 사용.
+  const data = await ghGet(path);
+  if (data.content && data.encoding === "base64") {
+    const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+  // 1MB(1,048,576 bytes) 초과: Contents API는 content를 빈 문자열(encoding:"none")로 반환한다.
+  // 이 경우에만 raw 미디어 타입으로 재요청해 크기 제한 없이(≤100MB) 원문을 받는다.
+  // (eval-app 등 대용량 통합 셸 대응. 일반 파일은 위 base64 경로를 그대로 타 회귀 없음.)
   const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
   const r = await fetch(url, {
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.raw" }
