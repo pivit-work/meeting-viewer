@@ -244,9 +244,16 @@ async function loadNewBadges() {
 }
 
 async function fetchText(path) {
-  const data = await ghGet(path);
-  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g, "")), c => c.charCodeAt(0));
-  return new TextDecoder("utf-8").decode(bytes);
+  // Contents API의 base64(content) 응답은 1MB 초과 파일에서 content가 빈 문자열로 와
+  // 코드가 사라지고 렌더가 실패한다. raw 미디어 타입으로 요청하면 크기 제한 없이(≤100MB)
+  // 원문 텍스트를 그대로 받아 대용량 통합 셸(eval-app 등)도 정상 렌더된다.
+  const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
+  const r = await fetch(url, {
+    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.raw" }
+  });
+  if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.text();
 }
 
 // ── Tree load ──────────────────────────────────────────────────────────────
