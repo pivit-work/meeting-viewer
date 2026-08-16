@@ -150,9 +150,13 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
   <div id="token-box">
     <h2>🔐 GitHub 토큰 필요</h2>
     <p>
-      pivit-specs 레포(private)에 접근하려면 읽기 전용 토큰이 필요합니다.<br>
-      <a href="https://github.com/settings/tokens/new?scopes=repo&description=Pivit+Viewer" target="_blank">토큰 발급 →</a>
-      (repo 권한 체크 후 생성, 이후 자동 저장)
+      기획서는 private 레포(pivit-specs)에 있어, 본인 GitHub 계정의 읽기 토큰이 필요합니다.
+      토큰은 이 브라우저에만 저장되고 GitHub 외 어디로도 전송되지 않습니다.<br><br>
+      <b style="color:#CBD5E1">1.</b> <a href="https://github.com/settings/tokens/new?scopes=repo&description=Pivit+Viewer" target="_blank">토큰 발급 페이지 열기 →</a><br>
+      <b style="color:#CBD5E1">2.</b> <code style="color:#818CF8">repo</code> 체크 확인 · Expiration 은 90 days 이상 권장<br>
+      <b style="color:#CBD5E1">3.</b> <b style="color:#CBD5E1">Generate token</b> 클릭 후 <code style="color:#818CF8">ghp_…</code> 복사<br>
+      <b style="color:#CBD5E1">4.</b> 아래에 붙여넣기<br><br>
+      <span style="color:#64748B">화면이 안 열리면 pivit-work 조직의 pivit-specs 접근 권한이 있는 계정인지 확인해 주세요.</span>
     </p>
     <input id="token-input" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxx" />
     <div id="token-err">형식이 올바르지 않습니다. ghp_ 또는 github_pat_ 로 시작해야 합니다.</div>
@@ -181,6 +185,7 @@ let activeTab  = "preview";
 let blobUrl    = null;
 let fileContent = "";
 let tokensScript = null;   // window.PIVIT 주입 스크립트 (pivit-specs SSOT 에서 로드)
+let tokensError = "";      // 위 로드가 실패한 사유 (백지 대신 화면에 띄운다)
 
 // ── Token ──────────────────────────────────────────────────────────────────
 function getToken() { return localStorage.getItem(LS_KEY) || ""; }
@@ -205,13 +210,21 @@ function resetToken() {
 }
 
 // ── GitHub API ─────────────────────────────────────────────────────────────
+// 실패 원인을 상태코드로 갈라 알려준다 — "HTTP 404" 만 보면 토큰을 다시 만들어야 하는지,
+// 권한을 받아야 하는지, 잠시 기다려야 하는지 판단할 수 없다.
+function ghFail(status) {
+  if (status === 401) { resetToken(); return new Error("토큰이 만료됐거나 잘못됐습니다 — 새로 발급해 주세요"); }
+  if (status === 403) return new Error("접근 거부(403) — 토큰에 repo 권한이 없거나 요청이 일시적으로 제한됐습니다");
+  if (status === 404) return new Error("찾을 수 없음(404) — pivit-specs 접근 권한이 없는 계정의 토큰일 수 있습니다");
+  return new Error(`HTTP ${status}`);
+}
+
 async function ghGet(path) {
   const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
   const r = await fetch(url, {
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" }
   });
-  if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw ghFail(r.status);
   return r.json();
 }
 
@@ -262,8 +275,7 @@ async function fetchText(path) {
     cache: "no-store",
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.raw" }
   });
-  if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw ghFail(r.status);
   return r.text();
 }
 
@@ -282,6 +294,7 @@ async function ensureTokens() {
     if (!m) console.warn("pivit_tokens.py 에서 TOKENS_SCRIPT 블록을 찾지 못했습니다.");
   } catch (e) {
     tokensScript = "";
+    tokensError = e.message;
     console.warn("디자인 토큰 로드 실패:", e.message);
   }
   return tokensScript;
@@ -420,6 +433,17 @@ function showPreview() {
   document.getElementById("source-wrap").classList.remove("active");
   if (!fileContent) return;
 
+  // 기획 JSX 는 window.PIVIT 없이는 최상위에서 죽어 백지가 된다.
+  // 원인 모를 백지 대신 무엇이 실패했는지 화면에 그대로 띄운다.
+  const isJsx = currentFile && currentFile.type !== "html" && currentFile.type !== "md";
+  if (isJsx && !tokensScript) {
+    renderNotice("디자인 토큰을 불러오지 못했습니다",
+      (tokensError || "scripts/pivit_tokens.py 를 읽지 못했습니다.") +
+      "<br><br>토큰 권한(repo)과 pivit-specs 접근 권한을 확인한 뒤 새로고침해 주세요." +
+      "<br>Source 탭에서는 원본 코드를 그대로 볼 수 있습니다.");
+    return;
+  }
+
   const loader = document.getElementById("preview-loader");
   loader.classList.remove("done");
 
@@ -434,6 +458,23 @@ function showPreview() {
   const frame = document.getElementById("preview-frame");
   frame.onload = () => loader.classList.add("done");
   frame.src = blobUrl;
+}
+
+// 미리보기 자리에 안내문을 띄운다 (iframe 안에 렌더 — 미리보기 영역을 그대로 쓴다)
+function renderNotice(title, body) {
+  const loader = document.getElementById("preview-loader");
+  loader.classList.add("done");
+  if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;
+         display:flex;align-items:center;justify-content:center;height:100vh}
+    .box{max-width:560px;padding:28px 30px;background:#fff;border:1px solid #FECACA;border-left:4px solid #F87171;
+         border-radius:12px;color:#334155;font-size:13px;line-height:1.8}
+    .box b{display:block;font-size:15px;color:#B91C1C;margin-bottom:10px}
+  </style></head><body><div class="box"><b>⚠ ${title}</b>${body}</div></body></html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  blobUrl = URL.createObjectURL(blob);
+  document.getElementById("preview-frame").src = blobUrl;
 }
 
 function buildMarkdownHTML(md) {
