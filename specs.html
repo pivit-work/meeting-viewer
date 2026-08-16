@@ -180,6 +180,7 @@ let currentFile = null;
 let activeTab  = "preview";
 let blobUrl    = null;
 let fileContent = "";
+let tokensScript = null;   // window.PIVIT 주입 스크립트 (pivit-specs SSOT 에서 로드)
 
 // ── Token ──────────────────────────────────────────────────────────────────
 function getToken() { return localStorage.getItem(LS_KEY) || ""; }
@@ -253,13 +254,37 @@ async function fetchText(path) {
   // 1MB(1,048,576 bytes) 초과: Contents API는 content를 빈 문자열(encoding:"none")로 반환한다.
   // 이 경우에만 raw 미디어 타입으로 재요청해 크기 제한 없이(≤100MB) 원문을 받는다.
   // (eval-app 등 대용량 통합 셸 대응. 일반 파일은 위 base64 경로를 그대로 타 회귀 없음.)
+  // cache:"no-store" 필수 — 위 ghGet 과 URL 이 같아서 브라우저가 Accept 헤더 차이를 무시하고
+  // 방금 캐싱한 JSON 응답을 그대로 돌려준다(GitHub 이 Vary:Accept 를 보내도 재현된다).
+  // 그러면 파일 본문 대신 메타데이터 JSX 가 렌더돼 Babel 이 SyntaxError 를 던진다.
   const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
   const r = await fetch(url, {
+    cache: "no-store",
     headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.raw" }
   });
   if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.text();
+}
+
+// ── Design tokens ──────────────────────────────────────────────────────────
+// 화면 기획 JSX 는 import 없이 전역 `window.PIVIT` 토큰을 쓴다(pivit-specs 절대규칙 7).
+// 이 뷰어가 토큰을 주입하지 않으면 `const P = window.PIVIT` 이 undefined 가 되고,
+// 모듈 최상위에서 P.color 를 읽는 순간 던져져 React 가 마운트되기도 전에 백지가 된다.
+// 토큰 SSOT 는 pivit-specs 의 scripts/pivit_tokens.py 한 곳뿐이므로 값을 복사해 오지 않고
+// 세션당 한 번 원문을 읽어 TOKENS_SCRIPT 블록을 그대로 주입한다(복사본은 반드시 드리프트한다).
+async function ensureTokens() {
+  if (tokensScript !== null) return tokensScript;
+  try {
+    const py = await fetchText("scripts/pivit_tokens.py");
+    const m = py.match(/TOKENS_SCRIPT\s*=\s*"{3}([\s\S]*?)"{3}/);
+    tokensScript = m ? m[1] : "";
+    if (!m) console.warn("pivit_tokens.py 에서 TOKENS_SCRIPT 블록을 찾지 못했습니다.");
+  } catch (e) {
+    tokensScript = "";
+    console.warn("디자인 토큰 로드 실패:", e.message);
+  }
+  return tokensScript;
 }
 
 // ── Tree load ──────────────────────────────────────────────────────────────
@@ -369,8 +394,9 @@ async function selectFile(file, folderKey) {
 
   document.getElementById("empty").style.display = "none";
 
-  // Load content
+  // Load content (JSX 는 토큰이 먼저 있어야 렌더된다)
   try {
+    if (file.type !== "html" && file.type !== "md") await ensureTokens();
     fileContent = await fetchText(file.path);
   } catch (e) {
     fileContent = `// 로드 실패: ${e.message}`;
@@ -525,13 +551,17 @@ try {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://pivit-work.github.io/design-system-docs/tokens.css">
+<link rel="stylesheet" href="https://pivit-work.github.io/design-system-docs/tokens-dark.css">
+<!-- 디자인 토큰 전역(window.PIVIT) — 화면 JSX 모듈보다 먼저 정의돼야 한다 -->
+<script>${tokensScript}<\/script>
 <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"><\/script>
 <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"><\/script>
 <script crossorigin src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"><\/script>
 ${rechartsScript}
 <style>
 *,*::before,*::after{box-sizing:border-box}
-body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
+body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;background:var(--colors-background-bgPrimary,#f3f4f6);color:var(--colors-text-textPrimary,#596069)}
 </style>
 <script>
 // 실제 에러를 화면에 노출 — cross-origin "Script error. Line: 0" 마스킹 방지
@@ -544,8 +574,15 @@ body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif}
     root.innerHTML = '<div style="margin:24px;padding:18px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#B91C1C;line-height:1.6;white-space:pre-wrap;word-break:break-word"><b style="font-size:13px">⚠ ' + title + '</b><br><br>' + (detail || '') + '</div>';
   }
   window.addEventListener('error', function(e){
-    if (e && e.error) { show('실행 오류', (e.error.message || '') + '\n\n' + (e.error.stack || '')); }
-    else { show('스크립트 로드 실패', (e && e.message ? e.message : 'Script error') + '\n출처: ' + ((e && e.filename) || 'unknown') + ':' + ((e && e.lineno) || 0) + '\n\nCDN(unpkg) 스크립트를 불러오지 못했을 수 있습니다. 인터넷 연결을 확인하세요.'); }
+    // capture 단계에서는 <img>·<link>·<script> 의 "리소스 로드 실패"도 잡힌다.
+    // 기획 JSX 가 흔히 다는 Google Fonts <link> 처럼 404 나는 부수 리소스 하나가
+    // 정상 렌더된 화면을 통째로 에러 박스로 덮어쓰는 사고를 막는다 — 경고만 남긴다.
+    if (e && e.target && e.target !== window && e.target.tagName) {
+      console.warn('리소스 로드 실패:', e.target.src || e.target.href || e.target.tagName);
+      return;
+    }
+    if (e && e.error) { show('실행 오류', (e.error.message || '') + '\\n\\n' + (e.error.stack || '')); }
+    else { show('스크립트 로드 실패', (e && e.message ? e.message : 'Script error') + '\\n출처: ' + ((e && e.filename) || 'unknown') + ':' + ((e && e.lineno) || 0) + '\\n\\nCDN(unpkg) 스크립트를 불러오지 못했을 수 있습니다. 인터넷 연결을 확인하세요.'); }
   }, true);
   window.addEventListener('unhandledrejection', function(e){
     var r = e && e.reason; show('비동기 오류', r ? (r.stack || r.message || String(r)) : 'unknown');
