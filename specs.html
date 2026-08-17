@@ -562,7 +562,10 @@ function buildMarkdownHTML(md, ghDirUrl) {
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.8;color:#1e293b;max-width:900px;margin:0 auto;padding:32px 40px;background:#fff;word-break:break-word}
+  /* word-break:break-word 를 body 전체에 걸지 않는다 — 표 셀의 min-content 폭이 한 글자로
+     계산돼 auto 레이아웃이 짧은 열('그룹','메뉴')까지 마음대로 쥐어짜 줄바꿈시킨다.
+     긴 경로·URL 만 code/pre 에서 끊는다. */
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.8;color:#1e293b;max-width:900px;margin:0 auto;padding:32px 40px;background:#fff}
   h1{font-size:22px;font-weight:800;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:10px;margin:0 0 20px}
   h2{font-size:17px;font-weight:700;color:#1e293b;margin:28px 0 10px;padding-left:10px;border-left:3px solid #4f6af5}
   h3{font-size:14px;font-weight:700;color:#334155;margin:20px 0 8px}
@@ -573,13 +576,25 @@ function buildMarkdownHTML(md, ghDirUrl) {
   blockquote{border-left:3px solid #cbd5e1;margin:12px 0;padding:8px 14px;background:#f8fafc;color:#475569;border-radius:0 6px 6px 0}
   blockquote p{margin:4px 0}
   pre{background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:12px 0}
-  code{background:#f1f5f9;color:#4f6af5;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:'DM Mono','Fira Code',monospace}
+  code{background:#f1f5f9;color:#4f6af5;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:'DM Mono','Fira Code',monospace;overflow-wrap:anywhere}
   pre code{background:none;color:inherit;padding:0;font-size:12.5px}
   /* 표는 넓은 기획 문서가 많아 가로 스크롤 컨테이너로 감싼다 */
   .table-wrap{overflow-x:auto;margin:12px 0;border:1px solid #e2e8f0;border-radius:8px}
+  /* 본문 글줄은 900px 로 두되 표만 화면 폭까지 좌우로 벌린다.
+     기획 문서는 셀 텍스트가 길어 본문 폭에 맞추면 모든 행이 3~4줄로 접혀 세로로만 늘어난다
+     (실측: 900px → 1460px 로 넓히면 같은 문서의 표 높이가 21% 줄었다).
+     width:max-content 는 쓰지 않는다 — 14개 표 중 8개가 가로 스크롤이 생겨 더 불편해진다. */
+  @media (min-width: 1000px) {
+    .table-wrap{
+      width: min(1460px, calc(100vw - 80px));
+      margin-left: calc((100% - min(1460px, 100vw - 80px)) / 2);
+    }
+  }
   table{width:100%;border-collapse:collapse;font-size:13px}
-  th{background:#f1f5f9;font-weight:700;color:#1e293b;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap}
-  td{padding:8px 12px;border:1px solid #e2e8f0;color:#334155;vertical-align:top}
+  /* keep-all: 한글은 기본값에서 글자 단위로 끊겨 '기록 & 리/포트' 처럼 낱말이 쪼개진다.
+     띄어쓰기에서만 끊게 해 셀을 읽을 수 있게 한다(긴 경로는 code 의 overflow-wrap 이 처리). */
+  th{background:#f1f5f9;font-weight:700;color:#1e293b;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap;word-break:keep-all}
+  td{padding:8px 12px;border:1px solid #e2e8f0;color:#334155;vertical-align:top;word-break:keep-all}
   tbody tr:nth-child(even) td{background:#f8fafc}
   ul,ol{margin:8px 0 8px 22px;padding:0}
   li{margin:3px 0;color:#334155}
