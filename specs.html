@@ -551,9 +551,12 @@ function buildMarkdownHTML(md, ghDirUrl) {
   // 번호 목록·링크·체크박스·중첩 목록은 아예 변환하지 않았으며 본문의 <br> 같은 HTML 을
   // 이스케이프해 코드처럼 노출했다. 기획 문서 대부분이 표 위주라 사실상 '안 보이는' 상태였다.
   // CDN 이 막힌 환경에서도 백지가 되지 않게, 파서가 없으면 원문을 그대로 <pre> 로 보여준다.
+  // 정규식·주석 안에서도 여는/닫는 script 태그와 주석 시작 기호를 글자 그대로 쓰지 않는다.
+  // HTML 파서는 <script> 안의 텍스트에서 그 시퀀스를 만나면 스크립트 블록을 끝내거나
+  // escaped 상태로 넘어가 버려서, 이 파일 전체가 파싱 도중에 끊긴다. 그래서 \x3C 로 적는다.
   const payload = JSON.stringify(md)
-    .replace(/<\/script/gi, "<\\/script")   // 본문 안의 </script> 로 스크립트가 끊기는 것을 막는다
-    .replace(/<!--/g, "<\\!--");
+    .replace(/\x3C\/script/gi, "<\\/script")   // 문서 본문에 닫는 script 태그가 있어도 안 끊기게
+    .replace(/\x3C!--/g, "<\\!--");
   const baseUrl = JSON.stringify(ghDirUrl || "");
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
