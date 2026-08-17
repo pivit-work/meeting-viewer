@@ -89,8 +89,10 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
 
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-#file-tree ::-webkit-scrollbar-thumb{background:#2D3748;border-radius:99px}
-#source-pre ::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
+/* 자손(::-webkit-scrollbar-thumb 앞 공백)이 아니라 해당 요소 자신의 스크롤바여야 한다 —
+   공백이 있으면 사이드바·소스 패널 스크롤바 썸에 색이 안 먹어 스크롤 위치가 보이지 않았다. */
+#file-tree::-webkit-scrollbar-thumb{background:#2D3748;border-radius:99px}
+#source-pre::-webkit-scrollbar-thumb{background:#334155;border-radius:99px}
 </style>
 </head>
 <body>
@@ -132,7 +134,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFo
     </div>
     <div id="preview-wrap" class="hidden">
       <div id="preview-loader"><div class="spin"></div> 렌더링 중…</div>
-      <iframe id="preview-frame" title="preview" sandbox="allow-scripts allow-same-origin"></iframe>
+      <!-- allow-popups: 미리보기 안의 외부 링크(target=_blank)가 열리려면 필요하다.
+           빠져 있으면 md 문서·홈페이지 HTML 의 링크 클릭이 아무 반응 없이 무시됐다. -->
+      <iframe id="preview-frame" title="preview" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
     </div>
     <div id="source-wrap">
       <div id="source-header">
@@ -171,7 +175,12 @@ const LS_KEY = "pivit_gh_token_specs";
 const GH_BASE = `https://github.com/${REPO}/blob/main/${FOLDER}`;
 
 // 숨길 폴더 (뷰어에서 제외)
-const SKIP_FOLDERS = new Set(["_workspace", "4. wireframe", "3. User-Journey-Map-User-Flow", "5. Data-inventory", "6. AI Data Spec", "Meeting-회의록"]);
+// _workspace 만 제외한다 — 확정 문서가 아닌 작업용 스크래치 폴더다.
+// 예전 목록은 `3. User-Journey-Map-User-Flow`·`5. Data-inventory`·`6. AI Data Spec`·`4. wireframe`
+// 까지 숨겨서, CLAUDE.md STEP 2 가 갱신 대상으로 못박은 arch-user-flow.md·arch-data-model.md·
+// arch-ai-data-spec.md·arch-nav-routing-policy.md(GNB SSOT) 가 뷰어에서 보이지 않았다.
+// "Meeting-회의록" 항목은 실제 폴더명이 `E. Meeting-회의록` 이라 한 번도 매칭된 적 없는 죽은 설정이라 지웠다.
+const SKIP_FOLDERS = new Set(["_workspace"]);
 
 const NEW_DAYS   = 7;          // 이 일수 이내 커밋 = NEW 배지
 const LS_SEEN_KEY = "pivit_seen_paths";  // 클릭해서 읽은 파일 경로 저장
@@ -215,16 +224,45 @@ function resetToken() {
 function ghFail(status) {
   if (status === 401) { resetToken(); return new Error("토큰이 만료됐거나 잘못됐습니다 — 새로 발급해 주세요"); }
   if (status === 403) return new Error("접근 거부(403) — 토큰에 repo 권한이 없거나 요청이 일시적으로 제한됐습니다");
-  if (status === 404) return new Error("찾을 수 없음(404) — pivit-specs 접근 권한이 없는 계정의 토큰일 수 있습니다");
+  if (status === 404) return new Error("찾을 수 없음(404) — 파일이 옮겨졌거나, pivit-specs 접근 권한이 없는 계정의 토큰일 수 있습니다");
   return new Error(`HTTP ${status}`);
 }
 
+// 경로 구분자(/)는 살리고 각 세그먼트만 인코딩한다.
+// 예전에는 경로 전체를 encodeURIComponent 해 슬래시까지 %2F 로 보냈다 — 지금은 통하지만 규격 밖이다.
+function ghUrl(path) {
+  return `https://api.github.com/repos/${REPO}/contents/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+// GitHub Contents API 는 부하·복제 지연 상황에서 존재하는 파일에도 404/403/5xx 를 간헐적으로 돌려준다.
+// 한 번의 실패를 그대로 "권한 없음" 으로 띄우면 사용자는 문서가 사라진 줄 알게 되므로 짧게 재시도한다.
+// (실제로 목록에는 보이는 screen-manager-message-modal.policy.md 가 단발 404 로 열리지 않았다.)
+async function ghFetch(path, accept, extra = {}) {
+  const url = ghUrl(path);
+  const TRIES = 3;
+  let lastErr = null;
+  for (let i = 0; i < TRIES; i++) {
+    let r;
+    try {
+      r = await fetch(url, {
+        ...extra,
+        headers: { Authorization: `token ${ghToken}`, Accept: accept },
+      });
+    } catch (e) {
+      lastErr = new Error(`네트워크 오류 — ${e.message}`);
+      if (i < TRIES - 1) { await new Promise(s => setTimeout(s, 400 * (i + 1))); continue; }
+      throw lastErr;
+    }
+    if (r.ok) return r;
+    if (r.status === 401) throw ghFail(401);   // 토큰 문제는 재시도해도 같다
+    lastErr = ghFail(r.status);
+    if (i < TRIES - 1) await new Promise(s => setTimeout(s, 400 * (i + 1)));
+  }
+  throw lastErr;
+}
+
 async function ghGet(path) {
-  const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
-  const r = await fetch(url, {
-    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" }
-  });
-  if (!r.ok) throw ghFail(r.status);
+  const r = await ghFetch(path, "application/vnd.github+json");
   return r.json();
 }
 
@@ -270,12 +308,7 @@ async function fetchText(path) {
   // cache:"no-store" 필수 — 위 ghGet 과 URL 이 같아서 브라우저가 Accept 헤더 차이를 무시하고
   // 방금 캐싱한 JSON 응답을 그대로 돌려준다(GitHub 이 Vary:Accept 를 보내도 재현된다).
   // 그러면 파일 본문 대신 메타데이터 JSX 가 렌더돼 Babel 이 SyntaxError 를 던진다.
-  const url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(path)}`;
-  const r = await fetch(url, {
-    cache: "no-store",
-    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github.raw" }
-  });
-  if (!r.ok) throw ghFail(r.status);
+  const r = await ghFetch(path, "application/vnd.github.raw", { cache: "no-store" });
   return r.text();
 }
 
@@ -301,35 +334,59 @@ async function ensureTokens() {
 }
 
 // ── Tree load ──────────────────────────────────────────────────────────────
+const DOC_RE = /\.(jsx|html|md)$/i;
+function typeOf(name) {
+  return /\.html$/i.test(name) ? "html" : /\.md$/i.test(name) ? "md" : "jsx";
+}
+function toFile(fi) {
+  return { name: fi.name, path: fi.path, htmlUrl: fi.html_url, type: typeOf(fi.name) };
+}
+
+// 하위 폴더까지 재귀로 수집한다.
+// 예전에는 최상위 폴더 1단만 읽어 `K. 내-설정/Public-Card`(내 프로필·공개카드),
+// `I. 매니저-뷰/Resource-투입현황`(리소스 투입현황), `Z. Backlog/*` 등
+// 하위 폴더에 든 46개 문서가 목록에 아예 나타나지 않았다.
+// 폴더 조회가 끝까지 실패하면 조용히 빼지 않고 여기에 모아 사이드바에 띄운다 —
+// 목록에서 말없이 사라지는 것이 바로 "안 보인다" 의 원인이 된다.
+let treeErrors = [];
+
+async function collectDir(dirPath, label, out) {
+  let items;
+  try {
+    items = await ghGet(dirPath);
+  } catch (e) {
+    treeErrors.push(`${label}: ${e.message}`);
+    return;
+  }
+
+  const files = items.filter(i => i.type === "file" && DOC_RE.test(i.name)).map(toFile);
+  if (files.length) out.push({ label, files });
+
+  const subs = items.filter(i => i.type === "dir" && !SKIP_FOLDERS.has(i.name));
+  await Promise.all(subs.map(s => collectDir(s.path, `${label} / ${s.name}`, out)));
+}
+
 async function loadTree() {
   try {
+    treeErrors = [];
     const items = await ghGet(FOLDER);
+
+    // 루트 파일도 md·html 까지 포함한다 — 시각 SSOT 인 arch-design-tokens.md 가
+    // 예전에는 .jsx 만 걸러서 목록에 없었다.
+    const rootFiles = items.filter(i => i.type === "file" && DOC_RE.test(i.name)).map(toFile);
+
     const folders = items.filter(i => i.type === "dir" && !SKIP_FOLDERS.has(i.name));
+    const collected = [];
+    await Promise.all(folders.map(f => collectDir(f.path, f.name, collected)));
 
-    // 각 폴더의 JSX 파일 목록 병렬 로드
-    const results = await Promise.all(folders.map(async f => {
-      try {
-        const files = await ghGet(f.path);
-        const jsxFiles = files.filter(fi => fi.name.endsWith(".jsx") || fi.name.endsWith(".html") || fi.name.endsWith(".md")).map(fi => ({
-          name: fi.name,
-          path: fi.path,
-          htmlUrl: fi.html_url,
-          type: fi.name.endsWith(".html") ? "html" : fi.name.endsWith(".md") ? "md" : "jsx",
-        }));
-        return { folder: f.name, files: jsxFiles };
-      } catch { return { folder: f.name, files: [] }; }
-    }));
-
-    // 루트의 JSX 파일도 포함
-    const rootJsx = items.filter(i => i.type === "file" && i.name.endsWith(".jsx")).map(fi => ({
-      name: fi.name, path: fi.path, htmlUrl: fi.html_url,
-    }));
+    // 병렬 수집이라 순서가 뒤섞인다 — 폴더 라벨 기준으로 정렬해 사이드바 순서를 고정한다.
+    // localeCompare 가 아니라 코드유닛 비교를 쓴다: GitHub API 가 주던 기존 순서
+    // (숫자 → 영문 → 한글)를 그대로 유지하고, 하위 폴더는 라벨이 "상위 / 하위" 라 상위 바로 뒤에 붙는다.
+    collected.sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 
     allGroups = {};
-    if (rootJsx.length) allGroups["(루트)"] = { label: "(루트)", files: rootJsx };
-    for (const { folder, files } of results) {
-      if (files.length > 0) allGroups[folder] = { label: folder, files };
-    }
+    if (rootFiles.length) allGroups["(루트)"] = { label: "(루트)", files: rootFiles };
+    for (const { label, files } of collected) allGroups[label] = { label, files };
 
     const total = Object.values(allGroups).reduce((s, g) => s + g.files.length, 0);
     document.getElementById("total-count").textContent = `${total}개`;
@@ -346,6 +403,15 @@ function renderTree() {
   const q = document.getElementById("search").value.toLowerCase();
   const tree = document.getElementById("file-tree");
   tree.innerHTML = "";
+
+  // 못 읽은 폴더가 있으면 먼저 알린다
+  if (treeErrors.length) {
+    const warn = document.createElement("div");
+    warn.style.cssText = "margin:6px 10px 10px;padding:8px 10px;background:#2a1a1a;border:1px solid #7f1d1d;border-radius:6px;font-size:10.5px;color:#FCA5A5;line-height:1.6";
+    warn.innerHTML = `<b>못 읽은 폴더 ${treeErrors.length}개</b><br>` +
+      treeErrors.map(t => t.replace(/[<>&]/g, "")).join("<br>");
+    tree.appendChild(warn);
+  }
 
   for (const [key, group] of Object.entries(allGroups)) {
     const files = group.files.filter(f =>
@@ -449,8 +515,10 @@ function showPreview() {
 
   if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null; }
 
+  // md 안의 상대 링크는 iframe 에서 열 수 없어 같은 폴더의 GitHub 경로로 돌려준다
+  const ghDirUrl = currentFile?.htmlUrl ? currentFile.htmlUrl.replace(/\/[^/]*$/, "") : "";
   const iframeContent = currentFile?.type === "html" ? fileContent
-                      : currentFile?.type === "md"   ? buildMarkdownHTML(fileContent)
+                      : currentFile?.type === "md"   ? buildMarkdownHTML(fileContent, ghDirUrl)
                       : buildIframeHTML(fileContent);
   const blob = new Blob([iframeContent], { type: "text/html" });
   blobUrl = URL.createObjectURL(blob);
@@ -477,64 +545,104 @@ function renderNotice(title, body) {
   document.getElementById("preview-frame").src = blobUrl;
 }
 
-function buildMarkdownHTML(md) {
-  // 간단한 마크다운 → HTML 변환 (marked.js 없이 인라인 처리)
-  const escaped = md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-  const html = escaped
-    // 코드 블록
-    .replace(/```[\s\S]*?```/g, m => {
-      const code = m.replace(/^```[^\n]*\n?/,'').replace(/\n?```$/,'');
-      return `<pre><code>${code}</code></pre>`;
-    })
-    // 인라인 코드
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // 제목
-    .replace(/^#### (.+)$/gm,'<h4>$1</h4>')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
-    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    // 굵게, 기울임
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g,'<em>$1</em>')
-    // 인용
-    .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>')
-    // 표 (thead 첫 행)
-    .replace(/^\|(.+)\|$/gm, row => {
-      const cells = row.split('|').filter((_,i,a)=>i>0&&i<a.length-1);
-      return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
-    })
-    .replace(/^\|[-| :]+\|$/gm,'')
-    // 수평선
-    .replace(/^---$/gm,'<hr>')
-    // 목록
-    .replace(/^- (.+)$/gm,'<li>$1</li>')
-    // 단락
-    .replace(/\n\n/g,'</p><p>')
-    // 줄바꿈
-    .replace(/\n/g,'<br>');
+function buildMarkdownHTML(md, ghDirUrl) {
+  // 손으로 짠 정규식 변환기를 GFM 파서(marked)로 교체했다.
+  // 구 변환기는 표를 <table> 없는 맨 <tr> 로 뱉어 브라우저가 태그를 버렸고(셀이 한 줄로 뭉갬),
+  // 번호 목록·링크·체크박스·중첩 목록은 아예 변환하지 않았으며 본문의 <br> 같은 HTML 을
+  // 이스케이프해 코드처럼 노출했다. 기획 문서 대부분이 표 위주라 사실상 '안 보이는' 상태였다.
+  // CDN 이 막힌 환경에서도 백지가 되지 않게, 파서가 없으면 원문을 그대로 <pre> 로 보여준다.
+  const payload = JSON.stringify(md)
+    .replace(/<\/script/gi, "<\\/script")   // 본문 안의 </script> 로 스크립트가 끊기는 것을 막는다
+    .replace(/<!--/g, "<\\!--");
+  const baseUrl = JSON.stringify(ghDirUrl || "");
 
   return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.8;color:#1e293b;max-width:860px;margin:0 auto;padding:32px 40px;background:#fff}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.8;color:#1e293b;max-width:900px;margin:0 auto;padding:32px 40px;background:#fff;word-break:break-word}
   h1{font-size:22px;font-weight:800;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:10px;margin:0 0 20px}
   h2{font-size:17px;font-weight:700;color:#1e293b;margin:28px 0 10px;padding-left:10px;border-left:3px solid #4f6af5}
   h3{font-size:14px;font-weight:700;color:#334155;margin:20px 0 8px}
-  h4{font-size:13px;font-weight:700;color:#475569;margin:14px 0 6px}
+  h4,h5,h6{font-size:13px;font-weight:700;color:#475569;margin:14px 0 6px}
   p{margin:8px 0;color:#334155}
-  blockquote{border-left:3px solid #cbd5e1;margin:12px 0;padding:8px 14px;background:#f8fafc;color:#475569;border-radius:0 6px 6px 0;font-style:italic}
+  a{color:#4f6af5;text-decoration:none;border-bottom:1px solid #c7d2fe}
+  a:hover{border-bottom-color:#4f6af5}
+  blockquote{border-left:3px solid #cbd5e1;margin:12px 0;padding:8px 14px;background:#f8fafc;color:#475569;border-radius:0 6px 6px 0}
+  blockquote p{margin:4px 0}
   pre{background:#0f172a;color:#e2e8f0;padding:14px 18px;border-radius:8px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:12px 0}
   code{background:#f1f5f9;color:#4f6af5;padding:2px 6px;border-radius:4px;font-size:12.5px;font-family:'DM Mono','Fira Code',monospace}
-  pre code{background:none;color:inherit;padding:0}
-  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
-  tr:first-child td{background:#f1f5f9;font-weight:700;color:#1e293b}
+  pre code{background:none;color:inherit;padding:0;font-size:12.5px}
+  /* 표는 넓은 기획 문서가 많아 가로 스크롤 컨테이너로 감싼다 */
+  .table-wrap{overflow-x:auto;margin:12px 0;border:1px solid #e2e8f0;border-radius:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:#f1f5f9;font-weight:700;color:#1e293b;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;white-space:nowrap}
   td{padding:8px 12px;border:1px solid #e2e8f0;color:#334155;vertical-align:top}
-  tr:nth-child(even) td{background:#f8fafc}
+  tbody tr:nth-child(even) td{background:#f8fafc}
+  ul,ol{margin:8px 0 8px 22px;padding:0}
   li{margin:3px 0;color:#334155}
+  li>ul,li>ol{margin:3px 0 3px 18px}
+  li>p{margin:0}
+  /* GFM 체크박스 목록: 마커를 지우고 체크박스만 남긴다 */
+  li:has(>input[type=checkbox]){list-style:none;margin-left:-20px}
+  li>input[type=checkbox]{margin-right:7px;accent-color:#4f6af5}
   hr{border:none;border-top:1px solid #e2e8f0;margin:20px 0}
-  strong{color:#1e293b}
-</style></head><body><p>${html}</p></body></html>`;
+  strong{color:#1e293b;font-weight:700}
+  img{max-width:100%}
+  .fallback{margin:0 0 16px;padding:14px 16px;background:#FFFBEB;border:1px solid #FDE68A;border-left:4px solid #F59E0B;border-radius:8px;color:#92400E;font-size:13px}
+  .raw{white-space:pre-wrap;background:#0f172a;color:#e2e8f0}
+</style>
+<script src="https://unpkg.com/marked@12.0.2/marked.min.js"><\/script>
+</head><body>
+<div id="doc"></div>
+<script>
+(function(){
+  var SRC = ${payload};
+  var BASE = ${baseUrl};
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  // 한글 제목도 앵커가 잡히도록 슬러그에 한글을 남긴다
+  function slug(s){
+    return s.toLowerCase().trim()
+      .replace(/[^0-9a-z가-힣ㄱ-ㅎㅏ-ㅣ\\s-]/g,'')
+      .replace(/\\s+/g,'-');
+  }
+  function run(){
+    var el = document.getElementById('doc');
+    if (typeof marked === 'undefined') {
+      el.innerHTML = '<div class="fallback">⚠ 마크다운 파서(marked)를 불러오지 못했습니다 — 네트워크나 CDN 차단을 확인하세요. 아래는 원문입니다.</div>'
+                   + '<pre class="raw">' + esc(SRC) + '</pre>';
+      return;
+    }
+    try {
+      el.innerHTML = marked.parse(SRC, { gfm: true, breaks: true });
+    } catch (e) {
+      el.innerHTML = '<div class="fallback">⚠ 마크다운 변환 실패: ' + esc(e.message) + '</div>'
+                   + '<pre class="raw">' + esc(SRC) + '</pre>';
+      return;
+    }
+    // 표 가로 스크롤 래퍼
+    el.querySelectorAll('table').forEach(function(t){
+      if (t.parentElement && t.parentElement.classList.contains('table-wrap')) return;
+      var w = document.createElement('div'); w.className = 'table-wrap';
+      t.parentNode.insertBefore(w, t); w.appendChild(t);
+    });
+    // 목차 링크(#앵커)가 동작하도록 제목에 id 부여 — marked 는 id 를 붙이지 않는다
+    el.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function(h){
+      if (!h.id) h.id = slug(h.textContent);
+    });
+    el.querySelectorAll('a[href]').forEach(function(a){
+      var href = a.getAttribute('href');
+      if (/^#/.test(href)) return;                       // 내부 앵커는 그대로
+      if (/^https?:/i.test(href)) { a.target = '_blank'; a.rel = 'noopener'; return; }
+      // 상대 경로(다른 기획 문서)는 iframe 안에서 열 수 없으니 GitHub 원문으로 보낸다
+      if (BASE) { a.href = BASE + '/' + href.replace(/^\\.\\//,''); a.target = '_blank'; a.rel = 'noopener'; }
+      else { a.removeAttribute('href'); a.style.color = '#94a3b8'; a.style.borderBottom = 'none'; }
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+<\/script>
+</body></html>`;
 }
 
 function buildIframeHTML(code) {
