@@ -4,7 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PIVIT 문서 뷰어</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- 버전 고정: 예전엔 `npm/marked` 로 latest 를 받아, 메이저 릴리스가 나오면 렌더가
+     예고 없이 바뀌거나 깨질 수 있었다. specs.html 과 같은 12.0.2 로 맞춘다. -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
   :root {
     --bg: #f7f8fa; --sidebar-bg: #fff; --sidebar-width: 280px;
@@ -193,9 +195,19 @@
   #md-body pre { background: #1e1e2e; color: #cdd6f4; padding: 16px; border-radius: 8px; overflow-x: auto; margin-bottom: 16px; }
   #md-body pre code { background: none; color: inherit; padding: 0; font-size: 13px; }
   #md-body blockquote { border-left: 3px solid var(--accent); padding-left: 14px; margin: 12px 0; color: var(--muted); }
-  #md-body table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
-  #md-body th { background: #f9fafb; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid var(--border); }
-  #md-body td { padding: 8px 12px; border: 1px solid var(--border); line-height: 1.6; }
+  /* 표는 본문 글줄(780px)보다 넓게 쓴다 — 기획·회의 문서의 셀 텍스트가 길어
+     본문 폭에 맞추면 모든 행이 여러 줄로 접히고, 한글은 기본값에서 글자 단위로 끊겨
+     낱말 중간이 갈린다(keep-all 로 띄어쓰기에서만 끊는다). 그래도 넘치면 가로 스크롤. */
+  #md-body .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+  @media (min-width: 1000px) {
+    #md-body .table-wrap {
+      width: min(1280px, calc(100vw - 340px));
+      margin-left: calc((100% - min(1280px, 100vw - 340px)) / 2);
+    }
+  }
+  #md-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #md-body th { background: #f9fafb; font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid var(--border); white-space: nowrap; word-break: keep-all; }
+  #md-body td { padding: 8px 12px; border: 1px solid var(--border); line-height: 1.6; word-break: keep-all; }
   #md-body tr:nth-child(even) td { background: #fafafa; }
   #md-body input[type="checkbox"] { margin-right: 6px; }
   #html-frame { width: 100%; height: 100%; border: none; display: none; background: #fff; }
@@ -368,7 +380,12 @@ const ALLOWED_EXT   = [".md", ".html", ".jsx"];
 
 const TAB_SOURCES = {
   minutes:    [{ repo: "pivit-work/team-wiki", folder: "회의록" }],
-  planning:   [{ repo: "pivit-work/team-wiki", folder: "기획내용" }],
+  // 회의록 폴더도 소스에 넣는다 — categorize() 가 `pivit_feature_*`·`earnest` 파일을
+  // category:"planning" 으로 돌리는데, planning 탭이 기획내용 폴더만 읽던 탓에
+  // 그 파일들이 minutes 탭(카테고리 불일치)에서도, planning 탭(캐시에 없음)에서도
+  // 안 보여 어느 탭에도 나타나지 않았다. 실제로 2건이 그렇게 숨어 있었다.
+  planning:   [{ repo: "pivit-work/team-wiki", folder: "기획내용" },
+               { repo: "pivit-work/team-wiki", folder: "회의록" }],
   arch:       [{ repo: "pivit-work/team-wiki", folder: "아키텍처" }],
   irdeck:     [{ repo: "pivit-work/team-wiki", folder: "ir-deck" }],
   automation: [
@@ -423,19 +440,52 @@ function updateKeyStatus() {
 }
 
 // ── GitHub API
-async function ghGet(repo, path) {
+function ghUrl(repo, path) {
   const encodedPath = path ? path.split('/').map(s => encodeURIComponent(s)).join('/') : '';
-  const r = await fetch(`https://api.github.com/repos/${repo}/contents/${encodedPath}`, {
-    headers: { Authorization: `token ${ghToken}`, Accept: "application/vnd.github+json" },
-  });
-  if (r.status === 401) { resetToken(); throw new Error("인증 실패"); }
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return `https://api.github.com/repos/${repo}/contents/${encodedPath}`;
+}
+
+// Contents API 는 존재하는 파일에도 일시적으로 404/403/5xx 를 주고, 네트워크가 한 번 튀면
+// fetch 자체가 실패한다. 재시도가 없으면 그 한 번이 그대로 "로드 실패" 로 보여
+// 문서가 없어진 것처럼 읽힌다(오늘 점검에서 md 2건이 실제로 이렇게 실패했고 재시도 1회로 살아났다).
+// 401 은 토큰 문제라 재시도하지 않는다.
+async function ghFetchRaw(repo, path, accept, extra = {}) {
+  const url = ghUrl(repo, path);
+  const TRIES = 3;
+  let lastErr = null;
+  for (let i = 0; i < TRIES; i++) {
+    let r;
+    try {
+      r = await fetch(url, { ...extra, headers: { Authorization: `token ${ghToken}`, Accept: accept } });
+    } catch (e) {
+      lastErr = new Error(`네트워크 오류 — ${e.message}`);
+      if (i < TRIES - 1) { await new Promise(s => setTimeout(s, 400 * (i + 1))); continue; }
+      throw lastErr;
+    }
+    if (r.ok) return r;
+    if (r.status === 401) { resetToken(); throw new Error("인증 실패 — 토큰을 다시 발급해 주세요"); }
+    lastErr = new Error(`HTTP ${r.status}`);
+    if (i < TRIES - 1) await new Promise(s => setTimeout(s, 400 * (i + 1)));
+  }
+  throw lastErr;
+}
+
+async function ghGet(repo, path) {
+  const r = await ghFetchRaw(repo, path, "application/vnd.github+json");
   return r.json();
 }
+
+// 1MB(1,048,576 bytes) 초과 파일은 Contents API 가 content:"" · encoding:"none" 으로 돌려준다.
+// 그대로 atob("") 하면 빈 문자열이 돼 에러도 없이 백지가 된다 — raw 미디어 타입으로 다시 받는다.
+// cache:"no-store" 필수: URL 이 같아 브라우저가 Accept 차이를 무시하고 방금 캐싱한 JSON 을 준다.
 async function fetchText(repo, path) {
-  const data  = await ghGet(repo, path);
-  const bytes = Uint8Array.from(atob(data.content.replace(/\n/g,"")), c=>c.charCodeAt(0));
-  return new TextDecoder("utf-8").decode(bytes);
+  const data = await ghGet(repo, path);
+  if (data.content && data.encoding === "base64") {
+    const bytes = Uint8Array.from(atob(data.content.replace(/\n/g,"")), c=>c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+  const r = await ghFetchRaw(repo, path, "application/vnd.github.raw", { cache: "no-store" });
+  return r.text();
 }
 async function fetchFilesRecursive(repo, dirPath, baseFolder, maxDepth=3, depth=0) {
   const items = await ghGet(repo, dirPath);
@@ -523,7 +573,9 @@ async function searchContent() {
       const idx = text.toLowerCase().indexOf(q.toLowerCase());
       if (idx!==-1) {
         const snip = text.slice(Math.max(0,idx-60),idx+120).replace(/\n/g," ").replace(/#+\s*/g,"").trim();
-        const hi = snip.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`);
+        // 원문을 그대로 innerHTML 에 넣으면 문서 안의 <, & 가 목록 마크업을 깨뜨린다 — 먼저 이스케이프한다
+        const esc = snip.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        const hi = esc.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark>${m}</mark>`);
         results.push({...f, snippet:hi});
       }
     } catch(_){}
@@ -593,9 +645,9 @@ async function openFile(path, label, htmlUrl, repo, isHtml, isJsx) {
     mdBody.style.display="block"; mdBody.innerHTML=`<div class="loading"><div class="spinner"></div> 불러오는 중...</div>`;
     frame.style.display="none"; frame.srcdoc="";
     try {
-      const data=await ghGet(repo,path);
-      const bytes=Uint8Array.from(atob(data.content.replace(/\n/g,"")),c=>c.charCodeAt(0));
-      mdBody.style.display="none"; frame.srcdoc=new TextDecoder("utf-8").decode(bytes);
+      // fetchText 경유 — 1MB 초과 raw 폴백과 재시도를 HTML 미리보기에도 적용한다
+      const html=contentCache[path]||await fetchText(repo,path); contentCache[path]=html;
+      mdBody.style.display="none"; frame.srcdoc=html;
       frame.style.display="block"; content.style.padding="0"; content.style.overflow="hidden";
     } catch(e) { mdBody.style.display="block"; mdBody.innerHTML=`<p style="color:#ef4444">로드 실패: ${e.message}</p>`; }
   } else {
@@ -606,7 +658,20 @@ async function openFile(path, label, htmlUrl, repo, isHtml, isJsx) {
       if (isJsx==="true") {
         const esc=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         mdBody.innerHTML=`<pre><code>${esc}</code></pre>`;
-      } else { mdBody.innerHTML=marked.parse(text); }
+      } else if (typeof marked === "undefined") {
+        // 파서를 못 받으면(CDN 차단·오프라인) 백지 대신 원문을 그대로 보여준다
+        mdBody.innerHTML=`<p style="color:#b45309">⚠ 마크다운 파서(marked)를 불러오지 못했습니다 — 원문을 표시합니다.</p>`
+          + `<pre><code>${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>`;
+      } else {
+        mdBody.innerHTML=marked.parse(text);
+        // 넓은 표는 가로 스크롤 컨테이너로 감싼다 — 780px 본문에서 표가 잘리거나 짜부라졌다
+        mdBody.querySelectorAll("table").forEach(t => {
+          if (t.parentElement && t.parentElement.classList.contains("table-wrap")) return;
+          const w=document.createElement("div"); w.className="table-wrap";
+          t.parentNode.insertBefore(w,t); w.appendChild(t);
+        });
+        mdBody.querySelectorAll('a[href^="http"]').forEach(a => { a.target="_blank"; a.rel="noopener"; });
+      }
       content.scrollTop=0;
     } catch(e) { mdBody.innerHTML=`<p style="color:#ef4444">파일 로드 실패: ${e.message}</p>`; }
   }
