@@ -484,6 +484,64 @@ async function selectFile(file, folderKey) {
   activeTab === "preview" ? showPreview() : showSource();
 }
 
+// ── Navigation bridge (화면 내 링크 → 파일 전환) ───────────────────────────
+// 화면 JSX 가 window.__pivitGo(경로)를 부르면 iframe 이 'pivit-nav' 메시지를 보낸다 → 경로표로 대상 파일을 찾아 연다.
+// 경로표는 pivit-specs 의 build-viewer.py NAV_MAP 을 그대로 옮긴 것이다(두 뷰어가 같은 경로를 같은 파일로 보낸다).
+// 예전에는 이 브리지가 없어 어드민 레일의 휴가 항목(→ S. 휴가-연차/leave-app.jsx)처럼 다른 파일이 그리는 화면을 열 수 없었다.
+const NAV_MAP = {
+  "/admin/employees":      "J. Admin_관리자/admin-app.jsx",
+  "/admin/messages":       "J. Admin_관리자/admin-app.jsx",
+  "/me":                   "K. 내-설정/settings-app.jsx",
+  "/admin/billing":        "L. 결제-구독/billing-app.jsx",
+  "/support":              "M. 고객지원/support-app.jsx",
+  "/ops/support":          "M. 고객지원/ops-support-app.jsx",
+  "/ops":                  "N. 마스터-어드민/ops-master-app.jsx",
+  "/resource/allocation":  "I. 매니저-뷰/manager-app.jsx",
+  "/projects":             "O. 프로젝트-원장/project-detail.jsx",
+  "/manager":              "I. 매니저-뷰/manager-app.jsx",
+  "/okr":                  "F. OKR/okr-app.jsx",
+  "/approvals":            "R. 전자결재-워크플로우/approval-app.jsx",
+  "/admin/approval-forms": "R. 전자결재-워크플로우/approval-app.jsx",
+  "/leave":                "S. 휴가-연차/leave-app.jsx",
+  "/admin/leave":          "S. 휴가-연차/leave-app.jsx",   // /admin/leave/balances · /admin/leave/settings
+};
+let pendingRoute = null;   // 브리지로 들어온 경로 — 다음 미리보기 iframe 주소의 해시로 넘긴다
+
+function findFileByPath(p) {
+  // 한글 파일명은 NFC/NFD 가 섞일 수 있어 NFC 로 맞춰 비교한다
+  const norm = s => (s && s.normalize) ? s.normalize("NFC") : s;
+  const target = norm(`${FOLDER}/${p}`);
+  for (const [key, g] of Object.entries(allGroups)) {
+    const f = g.files.find(x => norm(x.path) === target);
+    if (f) return { file: f, key };
+  }
+  return null;
+}
+function navigateToRoute(route) {
+  if (!route || typeof route !== "string") return;
+  // 표는 «경로»로만 찾는다(/approvals?box=todo → /approvals). 셸에는 쿼리까지 해시로 그대로 넘긴다
+  const base = route.split(/[?#]/)[0];
+  let fp = NAV_MAP[base];
+  if (!fp) {  // 최장 접두사 매칭 (/admin/leave/settings → /admin/leave)
+    const key = Object.keys(NAV_MAP)
+      .filter(k => base === k || base.startsWith(k + "/"))
+      .sort((a, b) => b.length - a.length)[0];
+    fp = key && NAV_MAP[key];
+  }
+  if (!fp) return;
+  const hit = findFileByPath(fp);
+  if (!hit) return;
+  // setTab 이 이전 파일을 먼저 다시 그리므로 해시는 그 뒤에 건다 — 앞에 걸면 이전 파일이 해시를 가져간다
+  if (activeTab !== "preview") setTab("preview");
+  pendingRoute = route;
+  selectFile(hit.file, hit.key);
+}
+window.addEventListener("message", function(e) {
+  const frame = document.getElementById("preview-frame");
+  if (!frame || e.source !== frame.contentWindow) return;   // 미리보기 iframe 이 보낸 것만 받는다
+  if (e.data && e.data.type === "pivit-nav") navigateToRoute(e.data.path);
+});
+
 // ── Tab ────────────────────────────────────────────────────────────────────
 function setTab(tab) {
   activeTab = tab;
@@ -525,7 +583,9 @@ function showPreview() {
 
   const frame = document.getElementById("preview-frame");
   frame.onload = () => loader.classList.add("done");
-  frame.src = blobUrl;
+  // 브리지로 들어온 경로는 해시로 넘긴다 — 셸이 location.hash 로 첫 화면을 고른다(leave-app.jsx initialRoute 등)
+  frame.src = blobUrl + (pendingRoute ? "#" + pendingRoute : "");
+  pendingRoute = null;
 }
 
 // 미리보기 자리에 안내문을 띄운다 (iframe 안에 렌더 — 미리보기 영역을 그대로 쓴다)
@@ -755,6 +815,10 @@ body{margin:0;font-family:'Pretendard','Noto Sans KR',system-ui,sans-serif;backg
     var r = e && e.reason; show('비동기 오류', r ? (r.stack || r.message || String(r)) : 'unknown');
   });
 })();
+// 화면 내 링크(nav) → 부모 뷰어로 경로 전달 (네비게이션 브리지 · pivit-specs build-viewer.py 와 같은 계약)
+window.__pivitGo = function(path){
+  try { if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'pivit-nav', path: path }, '*'); } catch (e) {}
+};
 <\/script>
 </head>
 <body>
